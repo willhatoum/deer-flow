@@ -232,7 +232,6 @@ models:
   #   supports_vision: true
   #   supports_thinking: true
 
-  
   # Example: OpenRouter (OpenAI-compatible)
   # OpenRouter models use the same ChatOpenAI + base_url pattern as other OpenAI-compatible gateways.
   # - name: openrouter-gemini-2.5-flash
@@ -552,34 +551,20 @@ memory:
   max_injection_tokens: 2000 # Maximum tokens for memory injection
 
 # ============================================================================
-# Checkpointer Configuration
+# Checkpointer Configuration (DEPRECATED — use `database` instead)
 # ============================================================================
-# Configure state persistence for the embedded DeerFlowClient.
-# The LangGraph Server manages its own state persistence separately
-# via the server infrastructure (this setting does not affect it).
+# Legacy standalone checkpointer config. Kept for backward compatibility.
+# Prefer the unified `database` section below, which drives BOTH the
+# LangGraph checkpointer AND DeerFlow application data (runs, feedback,
+# events) from a single backend setting.
 #
-# When configured, DeerFlowClient will automatically use this checkpointer,
-# enabling multi-turn conversations to persist across process restarts.
+# If both `checkpointer` and `database` are present, `checkpointer`
+# takes precedence for LangGraph state persistence only.
 #
-# Supported types:
-#   memory   - In-process only. State is lost when the process exits. (default)
-#   sqlite   - File-based SQLite persistence. Survives restarts.
-#              Requires: uv add langgraph-checkpoint-sqlite
-#   postgres - PostgreSQL persistence. Suitable for multi-process deployments.
-#              Requires: uv add langgraph-checkpoint-postgres psycopg[binary] psycopg-pool
-#
-# Examples:
-#
-# In-memory (default when omitted — no persistence):
 # checkpointer:
-#   type: memory
+#   type: sqlite
+#   connection_string: checkpoints.db
 #
-# SQLite (file-based, single-process):
-checkpointer:
-  type: sqlite
-  connection_string: checkpoints.db
-#
-# PostgreSQL (multi-process, production):
 # checkpointer:
 #   type: postgres
 #   connection_string: postgresql://user:password@localhost:5432/deerflow
@@ -588,7 +573,7 @@ checkpointer:
 # Database
 # ============================================================================
 # Unified storage backend for LangGraph checkpointer and DeerFlow
-# application data (runs, threads metadata, etc.).
+# application data (runs, threads metadata, feedback, etc.).
 #
 # backend: memory  -- No persistence, data lost on restart (default)
 # backend: sqlite  -- Single-node deployment, files in sqlite_dir
@@ -604,7 +589,6 @@ checkpointer:
 # NOTE: When both `checkpointer` and `database` are configured,
 # `checkpointer` takes precedence for LangGraph state persistence.
 # If you use `database`, you can remove the `checkpointer` section.
-#
 # database:
 #   backend: sqlite
 #   sqlite_dir: ./data
@@ -612,6 +596,9 @@ checkpointer:
 # database:
 #   backend: postgres
 #   postgres_url: $DATABASE_URL
+database:
+  backend: sqlite
+  sqlite_dir: ./data
 
 # ============================================================================
 # Run Events Configuration
@@ -626,6 +613,10 @@ checkpointer:
 #   backend: memory
 #   max_trace_content: 10240    # Truncation threshold for trace content (db backend, bytes)
 #   track_token_usage: true     # Accumulate token counts to RunRow
+run_events:
+  backend: memory
+  max_trace_content: 10240
+  track_token_usage: true
 
 # ============================================================================
 # IM Channels Configuration

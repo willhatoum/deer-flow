@@ -153,3 +153,44 @@ class TestRunRepository:
         row = await repo.get("r1")
         assert "obj" in row["kwargs"]
         await _cleanup()
+
+    @pytest.mark.anyio
+    async def test_update_run_completion_preserves_existing_fields(self, tmp_path):
+        """update_run_completion does not overwrite thread_id or assistant_id."""
+        repo = await _make_repo(tmp_path)
+        await repo.put("r1", thread_id="t1", assistant_id="agent1", status="running")
+        await repo.update_run_completion("r1", status="success", total_tokens=100)
+        row = await repo.get("r1")
+        assert row["thread_id"] == "t1"
+        assert row["assistant_id"] == "agent1"
+        assert row["total_tokens"] == 100
+        await _cleanup()
+
+    @pytest.mark.anyio
+    async def test_list_by_thread_ordered_desc(self, tmp_path):
+        """list_by_thread returns newest first."""
+        repo = await _make_repo(tmp_path)
+        await repo.put("r1", thread_id="t1", created_at="2024-01-01T00:00:00+00:00")
+        await repo.put("r2", thread_id="t1", created_at="2024-01-02T00:00:00+00:00")
+        rows = await repo.list_by_thread("t1")
+        assert rows[0]["run_id"] == "r2"
+        assert rows[1]["run_id"] == "r1"
+        await _cleanup()
+
+    @pytest.mark.anyio
+    async def test_list_by_thread_limit(self, tmp_path):
+        repo = await _make_repo(tmp_path)
+        for i in range(5):
+            await repo.put(f"r{i}", thread_id="t1")
+        rows = await repo.list_by_thread("t1", limit=2)
+        assert len(rows) == 2
+        await _cleanup()
+
+    @pytest.mark.anyio
+    async def test_owner_none_returns_all(self, tmp_path):
+        repo = await _make_repo(tmp_path)
+        await repo.put("r1", thread_id="t1", owner_id="alice")
+        await repo.put("r2", thread_id="t1", owner_id="bob")
+        rows = await repo.list_by_thread("t1", owner_id=None)
+        assert len(rows) == 2
+        await _cleanup()

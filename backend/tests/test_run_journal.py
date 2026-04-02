@@ -213,6 +213,92 @@ class TestIdentifyCaller:
         assert j._identify_caller({}) == "unknown"
 
 
+class TestChainErrorCallback:
+    @pytest.mark.anyio
+    async def test_on_chain_error_writes_run_error(self, journal_setup):
+        j, store, _ = journal_setup
+        # parent_run_id must be None (top-level chain) for the event to be recorded
+        j.on_chain_error(ValueError("boom"), run_id=uuid4(), parent_run_id=None)
+        # on_chain_error calls _flush_sync internally, give async task time to complete
+        await asyncio.sleep(0.05)
+        await j.flush()
+        events = await store.list_events("t1", "r1")
+        error_events = [e for e in events if e["event_type"] == "run_error"]
+        assert len(error_events) == 1
+        assert "boom" in error_events[0]["content"]
+        assert error_events[0]["metadata"]["error_type"] == "ValueError"
+
+
+class TestTokenTrackingDisabled:
+    @pytest.mark.anyio
+    async def test_track_token_usage_false(self):
+        """track_token_usage=False disables token accumulation."""
+        store = MemoryRunEventStore()
+        complete_data = {}
+        j = RunJournal("r1", "t1", store, track_token_usage=False, on_complete=lambda **d: complete_data.update(d), flush_threshold=100)
+        j.on_llm_end(_make_llm_response("X", usage={"input_tokens": 50, "output_tokens": 50, "total_tokens": 100}), run_id=uuid4(), tags=["lead_agent"])
+        j.on_chain_end({}, run_id=uuid4(), parent_run_id=None)
+        assert complete_data["total_tokens"] == 0
+        assert complete_data["llm_call_count"] == 0
+
+
+class TestMiddlewareNoMessage:
+    @pytest.mark.anyio
+    async def test_on_llm_end_middleware_no_ai_message(self, journal_setup):
+        j, store, _ = journal_setup
+        j.on_llm_end(_make_llm_response("Summary"), run_id=uuid4(), tags=["middleware:summarization"])
+        await j.flush()
+        messages = await store.list_messages("t1")
+        assert len(messages) == 0
+
+
+class TestUnknownCallerTokens:
+    @pytest.mark.anyio
+    async def test_unknown_caller_tokens_go_to_lead(self, journal_setup):
+        """No caller tag: tokens attributed to lead_agent bucket."""
+        j, store, _ = journal_setup
+        j.on_llm_end(_make_llm_response("X", usage={"input_tokens": 10, "output_tokens": 5, "total_tokens": 15}), run_id=uuid4(), tags=[])
+        assert j._lead_agent_tokens == 15
+
+
+class TestConvenienceFields:
+    @pytest.mark.anyio
+    async def test_last_ai_message_tracks_latest(self, journal_setup):
+        j, store, complete_data = journal_setup
+        j.on_llm_end(_make_llm_response("First"), run_id=uuid4(), tags=["lead_agent"])
+        j.on_llm_end(_make_llm_response("Second"), run_id=uuid4(), tags=["lead_agent"])
+        j.on_chain_end({}, run_id=uuid4(), parent_run_id=None)
+        assert complete_data["last_ai_message"] == "Second"
+        assert complete_data["message_count"] == 2
+
+    @pytest.mark.anyio
+    async def test_first_human_message_via_set(self, journal_setup):
+        j, store, complete_data = journal_setup
+        j.set_first_human_message("What is AI?")
+        j.on_chain_end({}, run_id=uuid4(), parent_run_id=None)
+        assert complete_data["first_human_message"] == "What is AI?"
+
+
+class TestToolError:
+    @pytest.mark.anyio
+    async def test_on_tool_error(self, journal_setup):
+        j, store, _ = journal_setup
+        j.on_tool_error(TimeoutError("timeout"), run_id=uuid4(), name="web_fetch")
+        await j.flush()
+        events = await store.list_events("t1", "r1")
+        assert any(e["event_type"] == "tool_error" for e in events)
+
+
+class TestOtherCustomEvent:
+    @pytest.mark.anyio
+    async def test_non_summarization_custom_event(self, journal_setup):
+        j, store, _ = journal_setup
+        j.on_custom_event("task_running", {"task_id": "t1", "status": "running"}, run_id=uuid4())
+        await j.flush()
+        events = await store.list_events("t1", "r1")
+        assert any(e["event_type"] == "task_running" for e in events)
+
+
 class TestPublicMethods:
     @pytest.mark.anyio
     async def test_set_first_human_message(self, journal_setup):
