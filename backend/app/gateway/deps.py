@@ -80,7 +80,7 @@ async def langgraph_runtime(app: FastAPI) -> AsyncGenerator[None, None]:
 
 
 # ---------------------------------------------------------------------------
-# Getters -- called by routers per-request
+# Getters – called by routers per-request
 # ---------------------------------------------------------------------------
 
 
@@ -108,6 +108,37 @@ get_run_store = _require("run_store", "Run store")
 def get_store(request: Request):
     """Return the global store (may be ``None`` if not configured)."""
     return getattr(request.app.state, "store", None)
+
+
+get_thread_meta_repo = _require("thread_meta_repo", "Thread metadata store")
+
+
+def get_run_context(request: Request) -> RunContext:
+    """Build a :class:`RunContext` from ``app.state`` singletons.
+
+    Returns a *base* context with infrastructure dependencies.  Callers that
+    need per-run fields (e.g. ``follow_up_to_run_id``) should use
+    ``dataclasses.replace(ctx, follow_up_to_run_id=...)`` before passing it
+    to :func:`run_agent`.
+    """
+    from deerflow.config import get_app_config
+
+    return RunContext(
+        checkpointer=get_checkpointer(request),
+        store=get_store(request),
+        event_store=get_run_event_store(request),
+        run_events_config=getattr(get_app_config(), "run_events", None),
+        thread_meta_repo=get_thread_meta_repo(request),
+    )
+
+
+async def get_current_user(request: Request) -> str | None:
+    """Extract user identity from request.
+
+    Phase 2: always returns None (no authentication).
+    Phase 3: extract user_id from JWT / session / API key header.
+    """
+    return None
 
 
 get_thread_meta_repo = _require("thread_meta_repo", "Thread metadata store")
