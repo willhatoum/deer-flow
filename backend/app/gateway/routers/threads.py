@@ -20,17 +20,10 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from app.gateway.deps import get_checkpointer, get_store
+from app.gateway.deps import get_checkpointer
 from app.gateway.utils import sanitize_log_param
 from deerflow.config.paths import Paths, get_paths
 from deerflow.runtime import serialize_channel_values
-
-# ---------------------------------------------------------------------------
-# Store namespace
-# ---------------------------------------------------------------------------
-
-THREADS_NS: tuple[str, ...] = ("threads",)
-"""Namespace used by the Store for thread metadata records."""
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/threads", tags=["threads"])
@@ -147,51 +140,6 @@ def _delete_thread_data(thread_id: str, paths: Paths | None = None) -> ThreadDel
     return ThreadDeleteResponse(success=True, message=f"Deleted local thread data for {thread_id}")
 
 
-async def _store_get(store, thread_id: str) -> dict | None:
-    """Fetch a thread record from the Store; returns ``None`` if absent."""
-    item = await store.aget(THREADS_NS, thread_id)
-    return item.value if item is not None else None
-
-
-async def _store_put(store, record: dict) -> None:
-    """Write a thread record to the Store."""
-    await store.aput(THREADS_NS, record["thread_id"], record)
-
-
-async def _store_upsert(store, thread_id: str, *, metadata: dict | None = None, values: dict | None = None) -> None:
-    """Create or refresh a thread record in the Store.
-
-    On creation the record is written with ``status="idle"``.  On update only
-    ``updated_at`` (and optionally ``metadata`` / ``values``) are changed so
-    that existing fields are preserved.
-
-    ``values`` carries the agent-state snapshot exposed to the frontend
-    (currently just ``{"title": "..."}``).
-    """
-    now = time.time()
-    existing = await _store_get(store, thread_id)
-    if existing is None:
-        await _store_put(
-            store,
-            {
-                "thread_id": thread_id,
-                "status": "idle",
-                "created_at": now,
-                "updated_at": now,
-                "metadata": metadata or {},
-                "values": values or {},
-            },
-        )
-    else:
-        val = dict(existing)
-        val["updated_at"] = now
-        if metadata:
-            val.setdefault("metadata", {}).update(metadata)
-        if values:
-            val.setdefault("values", {}).update(values)
-        await _store_put(store, val)
-
-
 def _derive_thread_status(checkpoint_tuple) -> str:
     """Derive thread status from checkpoint metadata."""
     if checkpoint_tuple is None:
@@ -221,21 +169,13 @@ async def delete_thread_data(thread_id: str, request: Request) -> ThreadDeleteRe
     """Delete local persisted filesystem data for a thread.
 
     Cleans DeerFlow-managed thread directories, removes checkpoint data,
-    removes the thread record from the Store, and removes the thread_meta
-    row from the configured ThreadMetaStore (sqlite or memory).
+    and removes the thread_meta row from the configured ThreadMetaStore
+    (sqlite or memory).
     """
     from app.gateway.deps import get_thread_meta_repo
 
     # Clean local filesystem
     response = _delete_thread_data(thread_id)
-
-    # Remove from Store (best-effort) — legacy in-memory thread record
-    store = get_store(request)
-    if store is not None:
-        try:
-            await store.adelete(THREADS_NS, thread_id)
-        except Exception:
-            logger.debug("Could not delete store record for thread %s (not critical)", sanitize_log_param(thread_id))
 
     # Remove checkpoints (best-effort)
     checkpointer = getattr(request.app.state, "checkpointer", None)
@@ -261,43 +201,38 @@ async def delete_thread_data(thread_id: str, request: Request) -> ThreadDeleteRe
 async def create_thread(body: ThreadCreateRequest, request: Request) -> ThreadResponse:
     """Create a new thread.
 
-    The thread record is written to the Store (for fast listing) and an
-    empty checkpoint is written to the checkpointer (for state reads).
+    Writes a thread_meta record (so the thread appears in /threads/search)
+    and an empty checkpoint (so state endpoints work immediately).
     Idempotent: returns the existing record when ``thread_id`` already exists.
     """
-    store = get_store(request)
+    from app.gateway.deps import get_thread_meta_repo
+
     checkpointer = get_checkpointer(request)
+    thread_meta_repo = get_thread_meta_repo(request)
     thread_id = body.thread_id or str(uuid.uuid4())
     now = time.time()
 
-    # Idempotency: return existing record from Store when already present
-    if store is not None:
-        existing_record = await _store_get(store, thread_id)
-        if existing_record is not None:
-            return ThreadResponse(
-                thread_id=thread_id,
-                status=existing_record.get("status", "idle"),
-                created_at=str(existing_record.get("created_at", "")),
-                updated_at=str(existing_record.get("updated_at", "")),
-                metadata=existing_record.get("metadata", {}),
-            )
+    # Idempotency: return existing record when already present
+    existing_record = await thread_meta_repo.get(thread_id)
+    if existing_record is not None:
+        return ThreadResponse(
+            thread_id=thread_id,
+            status=existing_record.get("status", "idle"),
+            created_at=str(existing_record.get("created_at", "")),
+            updated_at=str(existing_record.get("updated_at", "")),
+            metadata=existing_record.get("metadata", {}),
+        )
 
-    # Write thread record to Store
-    if store is not None:
-        try:
-            await _store_put(
-                store,
-                {
-                    "thread_id": thread_id,
-                    "status": "idle",
-                    "created_at": now,
-                    "updated_at": now,
-                    "metadata": body.metadata,
-                },
-            )
-        except Exception:
-            logger.exception("Failed to write thread %s to store", sanitize_log_param(thread_id))
-            raise HTTPException(status_code=500, detail="Failed to create thread")
+    # Write thread_meta so the thread appears in /threads/search immediately
+    try:
+        await thread_meta_repo.create(
+            thread_id,
+            assistant_id=getattr(body, "assistant_id", None),
+            metadata=body.metadata,
+        )
+    except Exception:
+        logger.exception("Failed to write thread_meta for %s", sanitize_log_param(thread_id))
+        raise HTTPException(status_code=500, detail="Failed to create thread")
 
     # Write an empty checkpoint so state endpoints work immediately
     config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
@@ -316,19 +251,6 @@ async def create_thread(body: ThreadCreateRequest, request: Request) -> ThreadRe
     except Exception:
         logger.exception("Failed to create checkpoint for thread %s", sanitize_log_param(thread_id))
         raise HTTPException(status_code=500, detail="Failed to create thread")
-
-    # Write thread_meta so the thread appears in /threads/search immediately
-    from app.gateway.deps import get_thread_meta_repo
-
-    thread_meta_repo = get_thread_meta_repo(request)
-    try:
-        await thread_meta_repo.create(
-            thread_id,
-            assistant_id=getattr(body, "assistant_id", None),
-            metadata=body.metadata,
-        )
-    except Exception:
-        logger.debug("Failed to upsert thread_meta on create for %s (non-fatal)", sanitize_log_param(thread_id))
 
     logger.info("Thread created: %s", sanitize_log_param(thread_id))
     return ThreadResponse(
@@ -373,31 +295,27 @@ async def search_threads(body: ThreadSearchRequest, request: Request) -> list[Th
 @router.patch("/{thread_id}", response_model=ThreadResponse)
 async def patch_thread(thread_id: str, body: ThreadPatchRequest, request: Request) -> ThreadResponse:
     """Merge metadata into a thread record."""
-    store = get_store(request)
-    if store is None:
-        raise HTTPException(status_code=503, detail="Store not available")
+    from app.gateway.deps import get_thread_meta_repo
 
-    record = await _store_get(store, thread_id)
+    thread_meta_repo = get_thread_meta_repo(request)
+    record = await thread_meta_repo.get(thread_id)
     if record is None:
         raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
 
-    now = time.time()
-    updated = dict(record)
-    updated.setdefault("metadata", {}).update(body.metadata)
-    updated["updated_at"] = now
-
     try:
-        await _store_put(store, updated)
+        await thread_meta_repo.update_metadata(thread_id, body.metadata)
     except Exception:
         logger.exception("Failed to patch thread %s", sanitize_log_param(thread_id))
         raise HTTPException(status_code=500, detail="Failed to update thread")
 
+    # Re-read to get the merged metadata + refreshed updated_at
+    record = await thread_meta_repo.get(thread_id) or record
     return ThreadResponse(
         thread_id=thread_id,
-        status=updated.get("status", "idle"),
-        created_at=str(updated.get("created_at", "")),
-        updated_at=str(now),
-        metadata=updated.get("metadata", {}),
+        status=record.get("status", "idle"),
+        created_at=str(record.get("created_at", "")),
+        updated_at=str(record.get("updated_at", "")),
+        metadata=record.get("metadata", {}),
     )
 
 
@@ -405,16 +323,16 @@ async def patch_thread(thread_id: str, body: ThreadPatchRequest, request: Reques
 async def get_thread(thread_id: str, request: Request) -> ThreadResponse:
     """Get thread info.
 
-    Reads metadata from the Store and derives the accurate execution
-    status from the checkpointer.  Falls back to the checkpointer alone
-    for threads that pre-date Store adoption (backward compat).
+    Reads metadata from the ThreadMetaStore and derives the accurate
+    execution status from the checkpointer.  Falls back to the checkpointer
+    alone for threads that pre-date ThreadMetaStore adoption (backward compat).
     """
-    store = get_store(request)
+    from app.gateway.deps import get_thread_meta_repo
+
+    thread_meta_repo = get_thread_meta_repo(request)
     checkpointer = get_checkpointer(request)
 
-    record: dict | None = None
-    if store is not None:
-        record = await _store_get(store, thread_id)
+    record: dict | None = await thread_meta_repo.get(thread_id)
 
     # Derive accurate status from the checkpointer
     config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
@@ -427,8 +345,9 @@ async def get_thread(thread_id: str, request: Request) -> ThreadResponse:
     if record is None and checkpoint_tuple is None:
         raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
 
-    # If the thread exists in the checkpointer but not the store (e.g. legacy
-    # data), synthesize a minimal store record from the checkpoint metadata.
+    # If the thread exists in the checkpointer but not in thread_meta (e.g.
+    # legacy data created before thread_meta adoption), synthesize a minimal
+    # record from the checkpoint metadata.
     if record is None and checkpoint_tuple is not None:
         ckpt_meta = getattr(checkpoint_tuple, "metadata", {}) or {}
         record = {

@@ -47,5 +47,14 @@ class ThreadMetaStore(abc.ABC):
         pass
 
     @abc.abstractmethod
+    async def update_metadata(self, thread_id: str, metadata: dict) -> None:
+        """Merge ``metadata`` into the thread's metadata field.
+
+        Existing keys are overwritten by the new values; keys absent from
+        ``metadata`` are preserved. No-op if the thread does not exist.
+        """
+        pass
+
+    @abc.abstractmethod
     async def delete(self, thread_id: str) -> None:
         pass

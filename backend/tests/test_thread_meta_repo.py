@@ -130,3 +130,28 @@ class TestThreadMetaRepository:
         repo = await _make_repo(tmp_path)
         await repo.delete("nonexistent")  # should not raise
         await _cleanup()
+
+    @pytest.mark.anyio
+    async def test_update_metadata_merges(self, tmp_path):
+        repo = await _make_repo(tmp_path)
+        await repo.create("t1", metadata={"a": 1, "b": 2})
+        await repo.update_metadata("t1", {"b": 99, "c": 3})
+        record = await repo.get("t1")
+        # Existing key preserved, overlapping key overwritten, new key added
+        assert record["metadata"] == {"a": 1, "b": 99, "c": 3}
+        await _cleanup()
+
+    @pytest.mark.anyio
+    async def test_update_metadata_on_empty(self, tmp_path):
+        repo = await _make_repo(tmp_path)
+        await repo.create("t1")
+        await repo.update_metadata("t1", {"k": "v"})
+        record = await repo.get("t1")
+        assert record["metadata"] == {"k": "v"}
+        await _cleanup()
+
+    @pytest.mark.anyio
+    async def test_update_metadata_nonexistent_is_noop(self, tmp_path):
+        repo = await _make_repo(tmp_path)
+        await repo.update_metadata("nonexistent", {"k": "v"})  # should not raise
+        await _cleanup()

@@ -89,6 +89,18 @@ class MemoryThreadMetaStore(ThreadMetaStore):
         record["updated_at"] = time.time()
         await self._store.aput(THREADS_NS, thread_id, record)
 
+    async def update_metadata(self, thread_id: str, metadata: dict) -> None:
+        """Merge ``metadata`` into the in-memory record. No-op if absent."""
+        item = await self._store.aget(THREADS_NS, thread_id)
+        if item is None:
+            return
+        record = dict(item.value)
+        merged = dict(record.get("metadata") or {})
+        merged.update(metadata)
+        record["metadata"] = merged
+        record["updated_at"] = time.time()
+        await self._store.aput(THREADS_NS, thread_id, record)
+
     async def delete(self, thread_id: str) -> None:
         await self._store.adelete(THREADS_NS, thread_id)
 

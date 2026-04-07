@@ -116,6 +116,22 @@ class ThreadMetaRepository(ThreadMetaStore):
             await session.execute(update(ThreadMetaRow).where(ThreadMetaRow.thread_id == thread_id).values(status=status, updated_at=datetime.now(UTC)))
             await session.commit()
 
+    async def update_metadata(self, thread_id: str, metadata: dict) -> None:
+        """Merge ``metadata`` into ``metadata_json``.
+
+        Read-modify-write inside a single session/transaction so concurrent
+        callers see consistent state. No-op if the row does not exist.
+        """
+        async with self._sf() as session:
+            row = await session.get(ThreadMetaRow, thread_id)
+            if row is None:
+                return
+            merged = dict(row.metadata_json or {})
+            merged.update(metadata)
+            row.metadata_json = merged
+            row.updated_at = datetime.now(UTC)
+            await session.commit()
+
     async def delete(self, thread_id: str) -> None:
         async with self._sf() as session:
             row = await session.get(ThreadMetaRow, thread_id)
