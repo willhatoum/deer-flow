@@ -12,7 +12,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from deerflow.persistence.feedback.model import FeedbackRow
-from deerflow.runtime.user_context import AUTO, _AutoSentinel, resolve_owner_id
+from deerflow.runtime.user_context import AUTO, _AutoSentinel, resolve_user_id
 
 
 class FeedbackRepository:
@@ -33,19 +33,19 @@ class FeedbackRepository:
         run_id: str,
         thread_id: str,
         rating: int,
-        owner_id: str | None | _AutoSentinel = AUTO,
+        user_id: str | None | _AutoSentinel = AUTO,
         message_id: str | None = None,
         comment: str | None = None,
     ) -> dict:
         """Create a feedback record. rating must be +1 or -1."""
         if rating not in (1, -1):
             raise ValueError(f"rating must be +1 or -1, got {rating}")
-        resolved_owner_id = resolve_owner_id(owner_id, method_name="FeedbackRepository.create")
+        resolved_user_id = resolve_user_id(user_id, method_name="FeedbackRepository.create")
         row = FeedbackRow(
             feedback_id=str(uuid.uuid4()),
             run_id=run_id,
             thread_id=thread_id,
-            owner_id=resolved_owner_id,
+            user_id=resolved_user_id,
             message_id=message_id,
             rating=rating,
             comment=comment,
@@ -61,14 +61,14 @@ class FeedbackRepository:
         self,
         feedback_id: str,
         *,
-        owner_id: str | None | _AutoSentinel = AUTO,
+        user_id: str | None | _AutoSentinel = AUTO,
     ) -> dict | None:
-        resolved_owner_id = resolve_owner_id(owner_id, method_name="FeedbackRepository.get")
+        resolved_user_id = resolve_user_id(user_id, method_name="FeedbackRepository.get")
         async with self._sf() as session:
             row = await session.get(FeedbackRow, feedback_id)
             if row is None:
                 return None
-            if resolved_owner_id is not None and row.owner_id != resolved_owner_id:
+            if resolved_user_id is not None and row.user_id != resolved_user_id:
                 return None
             return self._row_to_dict(row)
 
@@ -78,12 +78,12 @@ class FeedbackRepository:
         run_id: str,
         *,
         limit: int = 100,
-        owner_id: str | None | _AutoSentinel = AUTO,
+        user_id: str | None | _AutoSentinel = AUTO,
     ) -> list[dict]:
-        resolved_owner_id = resolve_owner_id(owner_id, method_name="FeedbackRepository.list_by_run")
+        resolved_user_id = resolve_user_id(user_id, method_name="FeedbackRepository.list_by_run")
         stmt = select(FeedbackRow).where(FeedbackRow.thread_id == thread_id, FeedbackRow.run_id == run_id)
-        if resolved_owner_id is not None:
-            stmt = stmt.where(FeedbackRow.owner_id == resolved_owner_id)
+        if resolved_user_id is not None:
+            stmt = stmt.where(FeedbackRow.user_id == resolved_user_id)
         stmt = stmt.order_by(FeedbackRow.created_at.asc()).limit(limit)
         async with self._sf() as session:
             result = await session.execute(stmt)
@@ -94,12 +94,12 @@ class FeedbackRepository:
         thread_id: str,
         *,
         limit: int = 100,
-        owner_id: str | None | _AutoSentinel = AUTO,
+        user_id: str | None | _AutoSentinel = AUTO,
     ) -> list[dict]:
-        resolved_owner_id = resolve_owner_id(owner_id, method_name="FeedbackRepository.list_by_thread")
+        resolved_user_id = resolve_user_id(user_id, method_name="FeedbackRepository.list_by_thread")
         stmt = select(FeedbackRow).where(FeedbackRow.thread_id == thread_id)
-        if resolved_owner_id is not None:
-            stmt = stmt.where(FeedbackRow.owner_id == resolved_owner_id)
+        if resolved_user_id is not None:
+            stmt = stmt.where(FeedbackRow.user_id == resolved_user_id)
         stmt = stmt.order_by(FeedbackRow.created_at.asc()).limit(limit)
         async with self._sf() as session:
             result = await session.execute(stmt)
@@ -109,14 +109,14 @@ class FeedbackRepository:
         self,
         feedback_id: str,
         *,
-        owner_id: str | None | _AutoSentinel = AUTO,
+        user_id: str | None | _AutoSentinel = AUTO,
     ) -> bool:
-        resolved_owner_id = resolve_owner_id(owner_id, method_name="FeedbackRepository.delete")
+        resolved_user_id = resolve_user_id(user_id, method_name="FeedbackRepository.delete")
         async with self._sf() as session:
             row = await session.get(FeedbackRow, feedback_id)
             if row is None:
                 return False
-            if resolved_owner_id is not None and row.owner_id != resolved_owner_id:
+            if resolved_user_id is not None and row.user_id != resolved_user_id:
                 return False
             await session.delete(row)
             await session.commit()

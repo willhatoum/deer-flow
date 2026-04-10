@@ -6,13 +6,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 import deerflow.config.app_config as app_config_module
-from deerflow.runtime.checkpointer import get_checkpointer, reset_checkpointer
 from deerflow.config.checkpointer_config import (
     CheckpointerConfig,
     get_checkpointer_config,
     load_checkpointer_config_from_dict,
     set_checkpointer_config,
 )
+from deerflow.runtime.checkpointer import get_checkpointer, reset_checkpointer
 
 
 @pytest.fixture(autouse=True)

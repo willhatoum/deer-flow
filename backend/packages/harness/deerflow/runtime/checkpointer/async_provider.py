@@ -24,12 +24,12 @@ from collections.abc import AsyncIterator
 
 from langgraph.types import Checkpointer
 
+from deerflow.config.app_config import get_app_config
 from deerflow.runtime.checkpointer.provider import (
     POSTGRES_CONN_REQUIRED,
     POSTGRES_INSTALL,
     SQLITE_INSTALL,
 )
-from deerflow.config.app_config import get_app_config
 from deerflow.runtime.store._sqlite_utils import ensure_sqlite_parent_dir, resolve_sqlite_conn_str
 
 logger = logging.getLogger(__name__)

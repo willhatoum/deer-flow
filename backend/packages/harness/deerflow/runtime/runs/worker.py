@@ -50,7 +50,7 @@ class RunContext:
     store: Any | None = field(default=None)
     event_store: Any | None = field(default=None)
     run_events_config: Any | None = field(default=None)
-    thread_meta_repo: Any | None = field(default=None)
+    thread_store: Any | None = field(default=None)
     follow_up_to_run_id: str | None = field(default=None)
 
 
@@ -75,7 +75,7 @@ async def run_agent(
     store = ctx.store
     event_store = ctx.event_store
     run_events_config = ctx.run_events_config
-    thread_meta_repo = ctx.thread_meta_repo
+    thread_store = ctx.thread_store
     follow_up_to_run_id = ctx.follow_up_to_run_id
 
     run_id = record.run_id
@@ -376,14 +376,14 @@ async def run_agent(
                     ckpt = getattr(ckpt_tuple, "checkpoint", {}) or {}
                     title = ckpt.get("channel_values", {}).get("title")
                     if title:
-                        await thread_meta_repo.update_display_name(thread_id, title)
+                        await thread_store.update_display_name(thread_id, title)
             except Exception:
                 logger.debug("Failed to sync title for thread %s (non-fatal)", thread_id)
 
         # Update threads_meta status based on run outcome
         try:
             final_status = "idle" if record.status == RunStatus.success else record.status.value
-            await thread_meta_repo.update_status(thread_id, final_status)
+            await thread_store.update_status(thread_id, final_status)
         except Exception:
             logger.debug("Failed to update thread_meta status for %s (non-fatal)", thread_id)
 

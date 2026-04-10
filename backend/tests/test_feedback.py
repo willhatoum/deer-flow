@@ -60,8 +60,8 @@ class TestFeedbackRepository:
     @pytest.mark.anyio
     async def test_create_with_owner(self, tmp_path):
         repo = await _make_feedback_repo(tmp_path)
-        record = await repo.create(run_id="r1", thread_id="t1", rating=1, owner_id="user-1")
-        assert record["owner_id"] == "user-1"
+        record = await repo.create(run_id="r1", thread_id="t1", rating=1, user_id="user-1")
+        assert record["user_id"] == "user-1"
         await _cleanup()
 
     @pytest.mark.anyio

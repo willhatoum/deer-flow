@@ -34,7 +34,7 @@ class FeedbackResponse(BaseModel):
     feedback_id: str
     run_id: str
     thread_id: str
-    owner_id: str | None = None
+    user_id: str | None = None
     message_id: str | None = None
     rating: int
     comment: str | None = None
@@ -80,7 +80,7 @@ async def create_feedback(
         run_id=run_id,
         thread_id=thread_id,
         rating=body.rating,
-        owner_id=user_id,
+        user_id=user_id,
         message_id=body.message_id,
         comment=body.comment,
     )

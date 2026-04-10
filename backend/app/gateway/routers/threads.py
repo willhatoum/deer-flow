@@ -34,7 +34,7 @@ router = APIRouter(prefix="/api/threads", tags=["threads"])
 # them. Pydantic ``@field_validator("metadata")`` strips them on every
 # inbound model below so a malicious client cannot reflect a forged
 # owner identity through the API surface. Defense-in-depth — the
-# row-level invariant is still ``threads_meta.owner_id`` populated from
+# row-level invariant is still ``threads_meta.user_id`` populated from
 # the auth contextvar; this list closes the metadata-blob echo gap.
 _SERVER_RESERVED_METADATA_KEYS: frozenset[str] = frozenset({"owner_id", "user_id"})
 
@@ -194,7 +194,7 @@ async def delete_thread_data(thread_id: str, request: Request) -> ThreadDeleteRe
     and removes the thread_meta row from the configured ThreadMetaStore
     (sqlite or memory).
     """
-    from app.gateway.deps import get_thread_meta_repo
+    from app.gateway.deps import get_thread_store
 
     # Clean local filesystem
     response = _delete_thread_data(thread_id)
@@ -211,8 +211,8 @@ async def delete_thread_data(thread_id: str, request: Request) -> ThreadDeleteRe
     # Remove thread_meta row (best-effort) — required for sqlite backend
     # so the deleted thread no longer appears in /threads/search.
     try:
-        thread_meta_repo = get_thread_meta_repo(request)
-        await thread_meta_repo.delete(thread_id)
+        thread_store = get_thread_store(request)
+        await thread_store.delete(thread_id)
     except Exception:
         logger.debug("Could not delete thread_meta for %s (not critical)", sanitize_log_param(thread_id))
 
@@ -227,17 +227,17 @@ async def create_thread(body: ThreadCreateRequest, request: Request) -> ThreadRe
     and an empty checkpoint (so state endpoints work immediately).
     Idempotent: returns the existing record when ``thread_id`` already exists.
     """
-    from app.gateway.deps import get_thread_meta_repo
+    from app.gateway.deps import get_thread_store
 
     checkpointer = get_checkpointer(request)
-    thread_meta_repo = get_thread_meta_repo(request)
+    thread_store = get_thread_store(request)
     thread_id = body.thread_id or str(uuid.uuid4())
     now = time.time()
     # ``body.metadata`` is already stripped of server-reserved keys by
     # ``ThreadCreateRequest._strip_reserved`` — see the model definition.
 
     # Idempotency: return existing record when already present
-    existing_record = await thread_meta_repo.get(thread_id)
+    existing_record = await thread_store.get(thread_id)
     if existing_record is not None:
         return ThreadResponse(
             thread_id=thread_id,
@@ -249,7 +249,7 @@ async def create_thread(body: ThreadCreateRequest, request: Request) -> ThreadRe
 
     # Write thread_meta so the thread appears in /threads/search immediately
     try:
-        await thread_meta_repo.create(
+        await thread_store.create(
             thread_id,
             assistant_id=getattr(body, "assistant_id", None),
             metadata=body.metadata,
@@ -293,9 +293,9 @@ async def search_threads(body: ThreadSearchRequest, request: Request) -> list[Th
     Delegates to the configured ThreadMetaStore implementation
     (SQL-backed for sqlite/postgres, Store-backed for memory mode).
     """
-    from app.gateway.deps import get_thread_meta_repo
+    from app.gateway.deps import get_thread_store
 
-    repo = get_thread_meta_repo(request)
+    repo = get_thread_store(request)
     rows = await repo.search(
         metadata=body.metadata or None,
         status=body.status,
@@ -320,22 +320,22 @@ async def search_threads(body: ThreadSearchRequest, request: Request) -> list[Th
 @require_permission("threads", "write", owner_check=True, require_existing=True)
 async def patch_thread(thread_id: str, body: ThreadPatchRequest, request: Request) -> ThreadResponse:
     """Merge metadata into a thread record."""
-    from app.gateway.deps import get_thread_meta_repo
+    from app.gateway.deps import get_thread_store
 
-    thread_meta_repo = get_thread_meta_repo(request)
-    record = await thread_meta_repo.get(thread_id)
+    thread_store = get_thread_store(request)
+    record = await thread_store.get(thread_id)
     if record is None:
         raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
 
     # ``body.metadata`` already stripped by ``ThreadPatchRequest._strip_reserved``.
     try:
-        await thread_meta_repo.update_metadata(thread_id, body.metadata)
+        await thread_store.update_metadata(thread_id, body.metadata)
     except Exception:
         logger.exception("Failed to patch thread %s", sanitize_log_param(thread_id))
         raise HTTPException(status_code=500, detail="Failed to update thread")
 
     # Re-read to get the merged metadata + refreshed updated_at
-    record = await thread_meta_repo.get(thread_id) or record
+    record = await thread_store.get(thread_id) or record
     return ThreadResponse(
         thread_id=thread_id,
         status=record.get("status", "idle"),
@@ -354,12 +354,12 @@ async def get_thread(thread_id: str, request: Request) -> ThreadResponse:
     execution status from the checkpointer.  Falls back to the checkpointer
     alone for threads that pre-date ThreadMetaStore adoption (backward compat).
     """
-    from app.gateway.deps import get_thread_meta_repo
+    from app.gateway.deps import get_thread_store
 
-    thread_meta_repo = get_thread_meta_repo(request)
+    thread_store = get_thread_store(request)
     checkpointer = get_checkpointer(request)
 
-    record: dict | None = await thread_meta_repo.get(thread_id)
+    record: dict | None = await thread_store.get(thread_id)
 
     # Derive accurate status from the checkpointer
     config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
@@ -462,10 +462,10 @@ async def update_thread_state(thread_id: str, body: ThreadStateUpdateRequest, re
     ThreadMetaStore abstraction so that ``/threads/search`` reflects the
     change immediately in both sqlite and memory backends.
     """
-    from app.gateway.deps import get_thread_meta_repo
+    from app.gateway.deps import get_thread_store
 
     checkpointer = get_checkpointer(request)
-    thread_meta_repo = get_thread_meta_repo(request)
+    thread_store = get_thread_store(request)
 
     # checkpoint_ns must be present in the config for aput — default to ""
     # (the root graph namespace).  checkpoint_id is optional; omitting it
@@ -529,7 +529,7 @@ async def update_thread_state(thread_id: str, body: ThreadStateUpdateRequest, re
         new_title = body.values["title"]
         if new_title:  # Skip empty strings and None
             try:
-                await thread_meta_repo.update_display_name(thread_id, new_title)
+                await thread_store.update_display_name(thread_id, new_title)
             except Exception:
                 logger.debug("Failed to sync title to thread_meta for %s (non-fatal)", sanitize_log_param(thread_id))
 
