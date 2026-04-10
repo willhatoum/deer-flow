@@ -678,3 +678,37 @@ export function useRenameThread() {
     },
   });
 }
+
+export function useThreadFeedback(threadId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["thread-feedback", threadId],
+    queryFn: async () => {
+      if (!threadId) return {};
+      const res = await fetchWithAuth(
+        `${getBackendBaseURL()}/api/threads/${encodeURIComponent(threadId)}/messages?limit=200`,
+      );
+      if (!res.ok) return {};
+      const messages: Array<{
+        run_id: string;
+        event_type: string;
+        feedback?: {
+          feedback_id: string;
+          rating: number;
+          comment: string | null;
+        } | null;
+      }> = await res.json();
+      const feedbackMap: Record<
+        string,
+        { feedback_id: string; rating: number; comment: string | null }
+      > = {};
+      for (const msg of messages) {
+        if (msg.feedback && msg.run_id) {
+          feedbackMap[msg.run_id] = msg.feedback;
+        }
+      }
+      return feedbackMap;
+    },
+    enabled: !!threadId,
+    staleTime: 30_000,
+  });
+}
