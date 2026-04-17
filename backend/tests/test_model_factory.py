@@ -72,8 +72,7 @@ class FakeChatModel(BaseChatModel):
 
 
 def _patch_factory(monkeypatch, app_config: AppConfig, model_class=FakeChatModel):
-    """Patch AppConfig.get, resolve_class, and tracing for isolated unit tests."""
-    monkeypatch.setattr(AppConfig, "current", staticmethod(lambda: app_config))
+    """Patch resolve_class and tracing for isolated unit tests."""
     monkeypatch.setattr(factory_module, "resolve_class", lambda path, base: model_class)
     monkeypatch.setattr(factory_module, "build_tracing_callbacks", lambda: [])
 
@@ -88,7 +87,7 @@ def test_uses_first_model_when_name_is_none(monkeypatch):
     _patch_factory(monkeypatch, cfg)
 
     FakeChatModel.captured_kwargs = {}
-    factory_module.create_chat_model(name=None, app_config=AppConfig.current())
+    factory_module.create_chat_model(name=None, app_config=cfg)
 
     # resolve_class is called — if we reach here without ValueError, the correct model was used
     assert FakeChatModel.captured_kwargs.get("model") == "alpha"
@@ -96,11 +95,10 @@ def test_uses_first_model_when_name_is_none(monkeypatch):
 
 def test_raises_when_model_not_found(monkeypatch):
     cfg = _make_app_config([_make_model("only-model")])
-    monkeypatch.setattr(AppConfig, "current", staticmethod(lambda: cfg))
     monkeypatch.setattr(factory_module, "build_tracing_callbacks", lambda: [])
 
     with pytest.raises(ValueError, match="ghost-model"):
-        factory_module.create_chat_model(name="ghost-model", app_config=AppConfig.current())
+        factory_module.create_chat_model(name="ghost-model", app_config=cfg)
 
 
 def test_appends_all_tracing_callbacks(monkeypatch):
@@ -109,7 +107,7 @@ def test_appends_all_tracing_callbacks(monkeypatch):
     monkeypatch.setattr(factory_module, "build_tracing_callbacks", lambda: ["smith-callback", "langfuse-callback"])
 
     FakeChatModel.captured_kwargs = {}
-    model = factory_module.create_chat_model(name="alpha", app_config=AppConfig.current())
+    model = factory_module.create_chat_model(name="alpha", app_config=cfg)
 
     assert model.callbacks == ["smith-callback", "langfuse-callback"]
 
@@ -127,7 +125,7 @@ def test_thinking_enabled_raises_when_not_supported_but_when_thinking_enabled_is
     _patch_factory(monkeypatch, cfg)
 
     with pytest.raises(ValueError, match="does not support thinking"):
-        factory_module.create_chat_model(name="no-think", thinking_enabled=True, app_config=AppConfig.current())
+        factory_module.create_chat_model(name="no-think", thinking_enabled=True, app_config=cfg)
 
 
 def test_thinking_enabled_raises_for_empty_when_thinking_enabled_explicitly_set(monkeypatch):
@@ -138,7 +136,7 @@ def test_thinking_enabled_raises_for_empty_when_thinking_enabled_explicitly_set(
     _patch_factory(monkeypatch, cfg)
 
     with pytest.raises(ValueError, match="does not support thinking"):
-        factory_module.create_chat_model(name="no-think-empty", thinking_enabled=True, app_config=AppConfig.current())
+        factory_module.create_chat_model(name="no-think-empty", thinking_enabled=True, app_config=cfg)
 
 
 def test_thinking_enabled_merges_when_thinking_enabled_settings(monkeypatch):
@@ -147,7 +145,7 @@ def test_thinking_enabled_merges_when_thinking_enabled_settings(monkeypatch):
     _patch_factory(monkeypatch, cfg)
 
     FakeChatModel.captured_kwargs = {}
-    factory_module.create_chat_model(name="thinker", thinking_enabled=True, app_config=AppConfig.current())
+    factory_module.create_chat_model(name="thinker", thinking_enabled=True, app_config=cfg)
 
     assert FakeChatModel.captured_kwargs.get("temperature") == 1.0
     assert FakeChatModel.captured_kwargs.get("max_tokens") == 16000
@@ -183,7 +181,7 @@ def test_thinking_disabled_openai_gateway_format(monkeypatch):
 
     monkeypatch.setattr(factory_module, "resolve_class", lambda path, base: CapturingModel)
 
-    factory_module.create_chat_model(name="openai-gw", thinking_enabled=False, app_config=AppConfig.current())
+    factory_module.create_chat_model(name="openai-gw", thinking_enabled=False, app_config=cfg)
 
     assert captured.get("extra_body") == {"thinking": {"type": "disabled"}}
     assert captured.get("reasoning_effort") == "minimal"
@@ -216,7 +214,7 @@ def test_thinking_disabled_langchain_anthropic_format(monkeypatch):
 
     monkeypatch.setattr(factory_module, "resolve_class", lambda path, base: CapturingModel)
 
-    factory_module.create_chat_model(name="anthropic-native", thinking_enabled=False, app_config=AppConfig.current())
+    factory_module.create_chat_model(name="anthropic-native", thinking_enabled=False, app_config=cfg)
 
     assert captured.get("thinking") == {"type": "disabled"}
     assert "extra_body" not in captured
@@ -238,7 +236,7 @@ def test_thinking_disabled_no_when_thinking_enabled_does_nothing(monkeypatch):
 
     monkeypatch.setattr(factory_module, "resolve_class", lambda path, base: CapturingModel)
 
-    factory_module.create_chat_model(name="plain", thinking_enabled=False, app_config=AppConfig.current())
+    factory_module.create_chat_model(name="plain", thinking_enabled=False, app_config=cfg)
 
     assert "extra_body" not in captured
     assert "thinking" not in captured
@@ -278,7 +276,7 @@ def test_when_thinking_disabled_takes_precedence_over_hardcoded_disable(monkeypa
 
     monkeypatch.setattr(factory_module, "resolve_class", lambda path, base: CapturingModel)
 
-    factory_module.create_chat_model(name="custom-disable", thinking_enabled=False, app_config=AppConfig.current())
+    factory_module.create_chat_model(name="custom-disable", thinking_enabled=False, app_config=cfg)
 
     assert captured.get("extra_body") == {"thinking": {"type": "disabled"}}
     # User overrode the hardcoded "minimal" with "low"
@@ -310,7 +308,7 @@ def test_when_thinking_disabled_not_used_when_thinking_enabled(monkeypatch):
 
     monkeypatch.setattr(factory_module, "resolve_class", lambda path, base: CapturingModel)
 
-    factory_module.create_chat_model(name="wtd-ignored", thinking_enabled=True, app_config=AppConfig.current())
+    factory_module.create_chat_model(name="wtd-ignored", thinking_enabled=True, app_config=cfg)
 
     # when_thinking_enabled should apply, NOT when_thinking_disabled
     assert captured.get("extra_body") == {"thinking": {"type": "enabled"}}
@@ -339,7 +337,7 @@ def test_when_thinking_disabled_without_when_thinking_enabled_still_applies(monk
 
     monkeypatch.setattr(factory_module, "resolve_class", lambda path, base: CapturingModel)
 
-    factory_module.create_chat_model(name="wtd-only", thinking_enabled=False, app_config=AppConfig.current())
+    factory_module.create_chat_model(name="wtd-only", thinking_enabled=False, app_config=cfg)
 
     # when_thinking_disabled is now gated independently of has_thinking_settings
     assert captured.get("reasoning_effort") == "low"
@@ -370,7 +368,7 @@ def test_when_thinking_disabled_excluded_from_model_dump(monkeypatch):
 
     monkeypatch.setattr(factory_module, "resolve_class", lambda path, base: CapturingModel)
 
-    factory_module.create_chat_model(name="no-leak-wtd", thinking_enabled=True, app_config=AppConfig.current())
+    factory_module.create_chat_model(name="no-leak-wtd", thinking_enabled=True, app_config=cfg)
 
     # when_thinking_disabled value must NOT appear as a raw key
     assert "when_thinking_disabled" not in captured
@@ -394,7 +392,7 @@ def test_reasoning_effort_cleared_when_not_supported(monkeypatch):
 
     monkeypatch.setattr(factory_module, "resolve_class", lambda path, base: CapturingModel)
 
-    factory_module.create_chat_model(name="no-effort", thinking_enabled=False, app_config=AppConfig.current())
+    factory_module.create_chat_model(name="no-effort", thinking_enabled=False, app_config=cfg)
 
     assert captured.get("reasoning_effort") is None
 
@@ -422,7 +420,7 @@ def test_reasoning_effort_preserved_when_supported(monkeypatch):
 
     monkeypatch.setattr(factory_module, "resolve_class", lambda path, base: CapturingModel)
 
-    factory_module.create_chat_model(name="effort-model", thinking_enabled=False, app_config=AppConfig.current())
+    factory_module.create_chat_model(name="effort-model", thinking_enabled=False, app_config=cfg)
 
     # When supports_reasoning_effort=True, it should NOT be cleared to None
     # The disable path sets it to "minimal"; supports_reasoning_effort=True keeps it
@@ -458,7 +456,7 @@ def test_thinking_shortcut_enables_thinking_when_thinking_enabled(monkeypatch):
 
     monkeypatch.setattr(factory_module, "resolve_class", lambda path, base: CapturingModel)
 
-    factory_module.create_chat_model(name="shortcut-model", thinking_enabled=True, app_config=AppConfig.current())
+    factory_module.create_chat_model(name="shortcut-model", thinking_enabled=True, app_config=cfg)
 
     assert captured.get("thinking") == thinking_settings
 
@@ -488,7 +486,7 @@ def test_thinking_shortcut_disables_thinking_when_thinking_disabled(monkeypatch)
 
     monkeypatch.setattr(factory_module, "resolve_class", lambda path, base: CapturingModel)
 
-    factory_module.create_chat_model(name="shortcut-disable", thinking_enabled=False, app_config=AppConfig.current())
+    factory_module.create_chat_model(name="shortcut-disable", thinking_enabled=False, app_config=cfg)
 
     assert captured.get("thinking") == {"type": "disabled"}
     assert "extra_body" not in captured
@@ -520,7 +518,7 @@ def test_thinking_shortcut_merges_with_when_thinking_enabled(monkeypatch):
 
     monkeypatch.setattr(factory_module, "resolve_class", lambda path, base: CapturingModel)
 
-    factory_module.create_chat_model(name="merge-model", thinking_enabled=True, app_config=AppConfig.current())
+    factory_module.create_chat_model(name="merge-model", thinking_enabled=True, app_config=cfg)
 
     # Both the thinking shortcut and when_thinking_enabled settings should be applied
     assert captured.get("thinking") == thinking_settings
@@ -552,7 +550,7 @@ def test_thinking_shortcut_not_leaked_into_model_when_disabled(monkeypatch):
 
     monkeypatch.setattr(factory_module, "resolve_class", lambda path, base: CapturingModel)
 
-    factory_module.create_chat_model(name="no-leak", thinking_enabled=False, app_config=AppConfig.current())
+    factory_module.create_chat_model(name="no-leak", thinking_enabled=False, app_config=cfg)
 
     # The disable path should have set thinking to disabled (not the raw enabled shortcut)
     assert captured.get("thinking") == {"type": "disabled"}
@@ -590,7 +588,7 @@ def test_openai_compatible_provider_passes_base_url(monkeypatch):
 
     monkeypatch.setattr(factory_module, "resolve_class", lambda path, base: CapturingModel)
 
-    factory_module.create_chat_model(name="minimax-m2.5", app_config=AppConfig.current())
+    factory_module.create_chat_model(name="minimax-m2.5", app_config=cfg)
 
     assert captured.get("model") == "MiniMax-M2.5"
     assert captured.get("base_url") == "https://api.minimax.io/v1"
@@ -638,11 +636,11 @@ def test_openai_compatible_provider_multiple_models(monkeypatch):
     monkeypatch.setattr(factory_module, "resolve_class", lambda path, base: CapturingModel)
 
     # Create first model
-    factory_module.create_chat_model(name="minimax-m2.5", app_config=AppConfig.current())
+    factory_module.create_chat_model(name="minimax-m2.5", app_config=cfg)
     assert captured.get("model") == "MiniMax-M2.5"
 
     # Create second model
-    factory_module.create_chat_model(name="minimax-m2.5-highspeed", app_config=AppConfig.current())
+    factory_module.create_chat_model(name="minimax-m2.5-highspeed", app_config=cfg)
     assert captured.get("model") == "MiniMax-M2.5-highspeed"
 
 
@@ -670,7 +668,7 @@ def test_codex_provider_disables_reasoning_when_thinking_disabled(monkeypatch):
     monkeypatch.setattr(codex_provider_module, "CodexChatModel", FakeCodexChatModel)
 
     FakeChatModel.captured_kwargs = {}
-    factory_module.create_chat_model(name="codex", thinking_enabled=False, app_config=AppConfig.current())
+    factory_module.create_chat_model(name="codex", thinking_enabled=False, app_config=cfg)
 
     assert FakeChatModel.captured_kwargs.get("reasoning_effort") == "none"
 
@@ -690,7 +688,7 @@ def test_codex_provider_preserves_explicit_reasoning_effort(monkeypatch):
     monkeypatch.setattr(codex_provider_module, "CodexChatModel", FakeCodexChatModel)
 
     FakeChatModel.captured_kwargs = {}
-    factory_module.create_chat_model(name="codex", thinking_enabled=True, reasoning_effort="high", app_config=AppConfig.current())
+    factory_module.create_chat_model(name="codex", thinking_enabled=True, reasoning_effort="high", app_config=cfg)
 
     assert FakeChatModel.captured_kwargs.get("reasoning_effort") == "high"
 
@@ -710,7 +708,7 @@ def test_codex_provider_defaults_reasoning_effort_to_medium(monkeypatch):
     monkeypatch.setattr(codex_provider_module, "CodexChatModel", FakeCodexChatModel)
 
     FakeChatModel.captured_kwargs = {}
-    factory_module.create_chat_model(name="codex", thinking_enabled=True, app_config=AppConfig.current())
+    factory_module.create_chat_model(name="codex", thinking_enabled=True, app_config=cfg)
 
     assert FakeChatModel.captured_kwargs.get("reasoning_effort") == "medium"
 
@@ -731,7 +729,7 @@ def test_codex_provider_strips_unsupported_max_tokens(monkeypatch):
     monkeypatch.setattr(codex_provider_module, "CodexChatModel", FakeCodexChatModel)
 
     FakeChatModel.captured_kwargs = {}
-    factory_module.create_chat_model(name="codex", thinking_enabled=True, app_config=AppConfig.current())
+    factory_module.create_chat_model(name="codex", thinking_enabled=True, app_config=cfg)
 
     assert "max_tokens" not in FakeChatModel.captured_kwargs
 
@@ -757,7 +755,7 @@ def test_thinking_disabled_vllm_chat_template_format(monkeypatch):
 
     monkeypatch.setattr(factory_module, "resolve_class", lambda path, base: CapturingModel)
 
-    factory_module.create_chat_model(name="vllm-qwen", thinking_enabled=False, app_config=AppConfig.current())
+    factory_module.create_chat_model(name="vllm-qwen", thinking_enabled=False, app_config=cfg)
 
     assert captured.get("extra_body") == {"top_k": 20, "chat_template_kwargs": {"thinking": False}}
     assert captured.get("reasoning_effort") is None
@@ -784,7 +782,7 @@ def test_thinking_disabled_vllm_enable_thinking_format(monkeypatch):
 
     monkeypatch.setattr(factory_module, "resolve_class", lambda path, base: CapturingModel)
 
-    factory_module.create_chat_model(name="vllm-qwen-enable", thinking_enabled=False, app_config=AppConfig.current())
+    factory_module.create_chat_model(name="vllm-qwen-enable", thinking_enabled=False, app_config=cfg)
 
     assert captured.get("extra_body") == {
         "top_k": 20,
@@ -818,7 +816,7 @@ def test_stream_usage_injected_for_openai_compatible_model(monkeypatch):
 
     monkeypatch.setattr(factory_module, "resolve_class", lambda path, base: CapturingModel)
 
-    factory_module.create_chat_model(name="deepseek", app_config=AppConfig.current())
+    factory_module.create_chat_model(name="deepseek", app_config=cfg)
 
     assert captured.get("stream_usage") is True
 
@@ -837,7 +835,7 @@ def test_stream_usage_not_injected_for_non_openai_model(monkeypatch):
 
     monkeypatch.setattr(factory_module, "resolve_class", lambda path, base: CapturingModel)
 
-    factory_module.create_chat_model(name="claude", app_config=AppConfig.current())
+    factory_module.create_chat_model(name="claude", app_config=cfg)
 
     assert "stream_usage" not in captured
 
@@ -867,7 +865,7 @@ def test_stream_usage_not_overridden_when_explicitly_set_in_config(monkeypatch):
 
     monkeypatch.setattr(factory_module, "resolve_class", lambda path, base: CapturingModel)
 
-    factory_module.create_chat_model(name="deepseek", app_config=AppConfig.current())
+    factory_module.create_chat_model(name="deepseek", app_config=cfg)
 
     assert captured.get("stream_usage") is False
 
@@ -897,7 +895,7 @@ def test_openai_responses_api_settings_are_passed_to_chatopenai(monkeypatch):
 
     monkeypatch.setattr(factory_module, "resolve_class", lambda path, base: CapturingModel)
 
-    factory_module.create_chat_model(name="gpt-5-responses", app_config=AppConfig.current())
+    factory_module.create_chat_model(name="gpt-5-responses", app_config=cfg)
 
     assert captured.get("use_responses_api") is True
     assert captured.get("output_version") == "responses/v1"
@@ -938,7 +936,7 @@ def test_no_duplicate_kwarg_when_reasoning_effort_in_config_and_thinking_disable
     _patch_factory(monkeypatch, cfg, model_class=CapturingModel)
 
     # Must not raise TypeError
-    factory_module.create_chat_model(name="doubao-model", thinking_enabled=False, app_config=AppConfig.current())
+    factory_module.create_chat_model(name="doubao-model", thinking_enabled=False, app_config=cfg)
 
     # kwargs (runtime) takes precedence: thinking-disabled path sets reasoning_effort=minimal
     assert captured.get("reasoning_effort") == "minimal"

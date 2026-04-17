@@ -130,7 +130,7 @@ from app.gateway.app import app
 from app.channels.service import start_channel_service
 
 # App → Harness (allowed)
-from deerflow.config import get_app_config
+from deerflow.config.app_config import AppConfig
 
 # Harness → App (FORBIDDEN — enforced by test_harness_boundary.py)
 # from app.gateway.routers.uploads import ...  # ← will fail CI
@@ -179,9 +179,16 @@ Setup: Copy `config.example.yaml` to `config.yaml` in the **project root** direc
 
 **Config Versioning**: `config.example.yaml` has a `config_version` field. On startup, `AppConfig.from_file()` compares user version vs example version and emits a warning if outdated. Missing `config_version` = version 0. Run `make config-upgrade` to auto-merge missing fields. When changing the config schema, bump `config_version` in `config.example.yaml`.
 
-**Config Lifecycle**: All config models are `frozen=True` (immutable after construction). `AppConfig.from_file()` is a pure function — no side effects on sub-module globals. `get_app_config()` is backed by a single `ContextVar`, set once via `init_app_config()` at process startup. To update config at runtime (e.g., Gateway API updates MCP/Skills), construct a new `AppConfig.from_file()` and call `init_app_config()` again. No mtime detection, no auto-reload.
+**Config Lifecycle**: All config models are `frozen=True` (immutable after construction). `AppConfig.from_file()` is a pure function — no side effects, no process-global state. The resolved `AppConfig` is passed as an explicit parameter down every consumer lane:
 
-**DeerFlowContext**: Per-invocation typed context for the agent execution path, injected via LangGraph `Runtime[DeerFlowContext]`. Holds `app_config: AppConfig`, `thread_id: str`, `agent_name: str | None`. Gateway runtime and `DeerFlowClient` construct full `DeerFlowContext` at invoke time; LangGraph Server path uses a fallback via `resolve_context()`. Middleware and tools access context through `resolve_context(runtime)` which returns a typed `DeerFlowContext` regardless of entry point. Mutable runtime state (`sandbox_id`) flows through `ThreadState.sandbox`, not context.
+- **Gateway**: `app.state.config` populated in lifespan; routers receive it via `Depends(get_config)` from `app/gateway/deps.py`.
+- **Client**: `DeerFlowClient._app_config` captured in the constructor; every method reads `self._app_config`.
+- **Agent run**: wrapped in `DeerFlowContext(app_config=…)` and injected via LangGraph `Runtime[DeerFlowContext].context`. Middleware and tools read `runtime.context.app_config` directly or via `resolve_context(runtime)`.
+- **LangGraph Server bootstrap**: `make_lead_agent` (registered in `langgraph.json`) calls `AppConfig.from_file()` itself — the only place in production that loads from disk at agent-build time.
+
+To update config at runtime (Gateway API mutations for MCP/Skills), write the new file and call `AppConfig.from_file()` to build a fresh snapshot, then swap `app.state.config`. No mtime detection, no auto-reload, no ambient ContextVar lookup (`AppConfig.current()` has been removed).
+
+**DeerFlowContext**: Per-invocation typed context for the agent execution path, injected via LangGraph `Runtime[DeerFlowContext]`. Holds `app_config: AppConfig`, `thread_id: str`, `agent_name: str | None`. Gateway runtime and `DeerFlowClient` construct full `DeerFlowContext` at invoke time; the LangGraph Server boundary builds one inside `make_lead_agent`. Middleware and tools access context through `resolve_context(runtime)` which returns the typed `DeerFlowContext` — legacy dict/None shapes are rejected. Mutable runtime state (`sandbox_id`) flows through `ThreadState.sandbox`, not context.
 
 Configuration priority:
 1. Explicit `config_path` argument

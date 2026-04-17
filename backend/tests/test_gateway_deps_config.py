@@ -1,9 +1,8 @@
 """Tests for the FastAPI get_config dependency.
 
 Phase 2 step 1: introduces the new explicit-config primitive that
-resolves ``AppConfig`` from ``request.app.state.config``. This coexists
-with the existing ``AppConfig.current()`` process-global during the
-migration; it becomes the sole mechanism after Phase 2 task P2-10.
+resolves ``AppConfig`` from ``request.app.state.config``. After migration,
+it is the sole mechanism.
 """
 
 from __future__ import annotations

@@ -102,12 +102,7 @@ def e2e_env(tmp_path, monkeypatch):
     monkeypatch.setattr("deerflow.config.paths._paths", None)
     monkeypatch.setattr("deerflow.sandbox.sandbox_provider._default_sandbox_provider", None)
 
-    # 2. Inject a clean AppConfig via the ContextVar-backed singleton.
-    #    Title, memory, and summarization are disabled in _make_e2e_config().
-    config = _make_e2e_config()
-    monkeypatch.setattr(AppConfig, "current", staticmethod(lambda: config))
-
-    # 3. Exclude TitleMiddleware from the chain.
+    # 2. Exclude TitleMiddleware from the chain.
     #    It triggers an extra LLM call to generate a thread title, which adds
     #    non-determinism and cost to E2E tests (title generation is already
     #    disabled via TitleConfig above, but the middleware still participates

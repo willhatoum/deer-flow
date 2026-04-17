@@ -46,7 +46,6 @@ def test_custom_skills_router_lifecycle(monkeypatch, tmp_path):
         skills=SimpleNamespace(get_skills_path=lambda: skills_root, container_path="/mnt/skills"),
         skill_evolution=SimpleNamespace(enabled=True, moderation_model_name=None),
     )
-    monkeypatch.setattr(AppConfig, "current", staticmethod(lambda: config))
     monkeypatch.setattr("app.gateway.routers.skills.scan_skill_content", lambda *args, **kwargs: _async_scan("allow", "ok"))
     refresh_calls = []
 
@@ -96,7 +95,6 @@ def test_custom_skill_rollback_blocked_by_scanner(monkeypatch, tmp_path):
         skills=SimpleNamespace(get_skills_path=lambda: skills_root, container_path="/mnt/skills"),
         skill_evolution=SimpleNamespace(enabled=True, moderation_model_name=None),
     )
-    monkeypatch.setattr(AppConfig, "current", staticmethod(lambda: config))
     get_skill_history_file("demo-skill", config).write_text(
         '{"action":"human_edit","prev_content":' + json.dumps(original_content) + ',"new_content":' + json.dumps(edited_content) + "}\n",
         encoding="utf-8",
@@ -138,7 +136,6 @@ def test_custom_skill_delete_preserves_history_and_allows_restore(monkeypatch, t
         skills=SimpleNamespace(get_skills_path=lambda: skills_root, container_path="/mnt/skills"),
         skill_evolution=SimpleNamespace(enabled=True, moderation_model_name=None),
     )
-    monkeypatch.setattr(AppConfig, "current", staticmethod(lambda: config))
     monkeypatch.setattr("app.gateway.routers.skills.scan_skill_content", lambda *args, **kwargs: _async_scan("allow", "ok"))
     refresh_calls = []
 
@@ -185,7 +182,6 @@ def test_update_skill_refreshes_prompt_cache_before_return(monkeypatch, tmp_path
     _app_cfg = AppConfig(sandbox=SandboxConfig(use="test"), extensions=ExtensionsConfig(mcp_servers={}, skills={}))
 
     monkeypatch.setattr("app.gateway.routers.skills.load_skills", _load_skills)
-    monkeypatch.setattr(AppConfig, "current", staticmethod(lambda: _app_cfg))
     monkeypatch.setattr(AppConfig, "from_file", staticmethod(lambda: _app_cfg))
     monkeypatch.setattr(skills_router.ExtensionsConfig, "resolve_config_path", staticmethod(lambda: config_path))
     monkeypatch.setattr("app.gateway.routers.skills.refresh_skills_system_prompt_cache_async", _refresh)

@@ -36,12 +36,6 @@ def storage() -> FileMemoryStorage:
     return FileMemoryStorage(_TEST_MEMORY_CONFIG)
 
 
-@pytest.fixture(autouse=True)
-def _mock_current_config():
-    """Ensure AppConfig.current() returns a minimal config for all tests."""
-    cfg = _mock_app_config()
-    with patch.object(AppConfig, "current", return_value=cfg):
-        yield
 
 
 class TestUserIsolatedStorage:

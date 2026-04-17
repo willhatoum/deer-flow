@@ -239,11 +239,9 @@ Commit: `a934a822`.
 
 # Phase 2: Pure explicit parameter passing
 
-> **Status:** Partially shipped. Tasks P2-1 through P2-5 merged (explicit-config primitives added alongside `AppConfig.current()` fallbacks). P2-6 through P2-10 remain open — they remove the fallbacks and finish the migration.
+> **Status:** Shipped. P2-1..P2-5 landed first with `AppConfig.current()` kept as a transition fallback; P2-6..P2-10 landed together in commit `84dccef2` to eliminate the fallback and delete the ambient-lookup surface entirely. `AppConfig` is now a pure Pydantic value object with no process-global state and no classmethod accessors.
 >
 > **Design:** [§8 of the design doc](./2026-04-12-config-refactor-design.md#8-phase-2-pure-explicit-parameter-passing)
->
-> **Goal:** Delete `AppConfig._global`, `_override`, `init`, `current`, `set_override`, `reset_override`. `AppConfig` becomes a pure Pydantic value object. Every consumer receives config as an explicit parameter.
 
 ## Shipped commits
 
@@ -254,39 +252,41 @@ Commit: `a934a822`.
 | `f8738d1e` | P2-3 | H (Client) | `DeerFlowClient.__init__(config=...)` captures config locally; multi-client isolation test pins invariant |
 | `23b424e7` | P2-4 | B (Agent construction) | `make_lead_agent`, `_build_middlewares`, `_resolve_model_name`, `build_lead_runtime_middlewares` accept optional `app_config` |
 | `74b7a7ef` | P2-5 (partial) | D (Runtime) | `RunContext` gains `app_config` field; Worker builds `DeerFlowContext` from it; Gateway `deps.get_run_context` populates it. Standalone providers (checkpointer/store/stream_bridge) already accept optional config from Phase 1 |
+| `84dccef2` | P2-6..P2-10 | C+E+F+I + deletion | Memory closure-captures `MemoryConfig`; sandbox/skills/community/factories/tools thread `app_config` end-to-end; `resolve_context()` rejects non-typed runtime.context; `AppConfig.current()` removed; `get_sandbox_provider(app_config)` required; `make_lead_agent` LangGraph-Server bootstrap path loads via `AppConfig.from_file()`. All 2337 non-e2e tests pass. |
 
-All five commits preserve backward compatibility by keeping `AppConfig.current()` as a fallback. No caller is broken.
+## Completed tasks (P2-6 through P2-10)
 
-## Deferred tasks (P2-6 through P2-10)
+All landed in `84dccef2`.
 
-Each remaining task deletes a `AppConfig.current()` call path after migrating the consumers that still use it. They can land incrementally.
+### P2-6: Memory subsystem closure-captured config (Category C) — shipped
+- [x] `MemoryConfig` captured at enqueue time so the Timer thread survives the ContextVar boundary.
+- [x] `deerflow/agents/memory/{queue,updater,storage}.py` no longer read any process-global.
 
-### P2-6: Memory subsystem closure-captured config (Category C)
-- Files: `deerflow/agents/memory/{queue,updater,storage}.py` (8 calls)
-- Pattern: `MemoryQueue.__init__(config: MemoryConfig)`, captured in Timer closure so the callback thread has config without consulting any global.
-- Risk: medium — Timer thread runs outside ContextVar scope; closure capture at enqueue time is the only safe path.
+### P2-7: Sandbox / skills / factories / tools / community (Categories E+F) — shipped
+- [x] `sandbox/tools.py` helpers take `app_config` explicitly; the `_cached` attribute trick is gone.
+- [x] `sandbox/security.py`, `sandbox/sandbox_provider.py`, `sandbox/local/local_sandbox_provider.py`, `community/aio_sandbox/aio_sandbox_provider.py` all require `app_config`.
+- [x] `skills/manager.py` + `skills/loader.py` + `agents/lead_agent/prompt.py` cache refresh thread `app_config` through the worker thread via closure.
+- [x] Community tools (tavily, jina, firecrawl, exa, ddg, image_search, infoquest, aio_sandbox) read `resolve_context(runtime).app_config`.
+- [x] `subagents/registry.py` (`get_subagent_config`, `list_subagents`, `get_available_subagent_names`) take `app_config`.
+- [x] `models/factory.py::create_chat_model` and `tools/tools.py::get_available_tools` require `app_config`.
 
-### P2-7: Sandbox / skills / factories / tools / community (Categories E+F)
-- Files: ~20 modules, ~35 call sites
-- Pattern: function signature gains `config: AppConfig`; caller threads it down.
-- Risk: low — mechanical. Each file is self-contained.
+### P2-8: Test fixtures (Category I) — shipped
+- [x] `conftest.py` autouse fixture no longer monkey-patches `AppConfig.current`; it only stubs `from_file()` so tests don't need a real `config.yaml`.
+- [x] ~90 call sites migrated: `patch.object(AppConfig, "current", ...)` removed where production no longer calls it (≈56 sites), and for the remaining ~10 files whose tests called `AppConfig.current()` themselves, the tests now hold the config in a local variable and pass it explicitly.
+- [x] `test_deer_flow_context.py` updated to assert that `resolve_context()` raises on dict/None contexts.
+- [x] `grep -rn 'AppConfig\.current' backend/tests` is clean.
 
-### P2-8: Test fixtures (Category I)
-- Files: ~18 test files, ~91 `patch.object(AppConfig, "current")` or `_global` mutations
-- Pattern: replace mock with `test_config` fixture returning an `AppConfig`; pass explicitly to function under test.
-- Risk: medium — largest diff. Can land file-by-file.
+### P2-9: Simplify `resolve_context()` — shipped
+- [x] `resolve_context(runtime)` returns `runtime.context` when it is a `DeerFlowContext`; any other shape raises `RuntimeError` pointing at the composition root that should have attached the typed context.
+- [x] The dict-context and `get_config().configurable` fallbacks are deleted.
 
-### P2-9: Simplify `resolve_context()`
-- File: `deerflow/config/deer_flow_context.py`
-- Pattern: remove `AppConfig.current()` fallback; raise on non-`DeerFlowContext` runtime.context.
-- Risk: low — one function. Depends on P2-6/7/8 to not leave dict-context callers.
-
-### P2-10: Delete `AppConfig` lifecycle
-- Files: `config/app_config.py`, `tests/conftest.py`, `tests/test_app_config_reload.py`, `backend/CLAUDE.md`
-- Pattern: grep confirms zero callers of `current()`, `init()`, `set_override()`, `reset_override()`; delete them plus `_global` and `_override`.
-- Risk: high if P2-6/7/8 incomplete — grep gate must be clean.
-
-The detailed task-level step descriptions below were written before Phase 2 was split into shippable chunks. They remain accurate for the work that lies ahead.
+### P2-10: Delete `AppConfig` lifecycle — shipped
+- [x] `AppConfig.current()` classmethod removed.
+- [x] `_global` / `_override` / `init` / `set_override` / `reset_override` already gone as of Phase 1; nothing left to delete on the ambient side.
+- [x] LangGraph Server bootstrap uses `AppConfig.from_file()` inside `make_lead_agent` — a pure load, not an ambient lookup.
+- [x] `backend/CLAUDE.md` Config Lifecycle section rewritten to describe the explicit-parameter design.
+- [x] `app/gateway/deps.py` docstrings no longer mention `AppConfig.current()`.
+- [x] Production grep confirms zero `AppConfig.current()` call sites in `backend/packages` or `backend/app`.
 
 ## Rationale
 

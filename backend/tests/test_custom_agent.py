@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 import yaml
 from fastapi.testclient import TestClient
 
-from deerflow.config.app_config import AppConfig
 from deerflow.config.memory_config import MemoryConfig
 
 _TEST_MEMORY_CONFIG = MemoryConfig()
@@ -332,12 +331,8 @@ class TestMemoryFilePath:
     def test_global_memory_path(self, tmp_path):
         """None agent_name should return global memory file."""
         from deerflow.agents.memory.storage import FileMemoryStorage
-        from deerflow.config.memory_config import MemoryConfig
 
-        with (
-            patch("deerflow.agents.memory.storage.get_paths", return_value=_make_paths(tmp_path)),
-            patch.object(AppConfig, "current", return_value=MagicMock(memory=MemoryConfig(storage_path=""))),
-        ):
+        with patch("deerflow.agents.memory.storage.get_paths", return_value=_make_paths(tmp_path)):
             storage = FileMemoryStorage(_TEST_MEMORY_CONFIG)
             path = storage._get_memory_file_path(None)
         assert path == tmp_path / "memory.json"
@@ -345,24 +340,16 @@ class TestMemoryFilePath:
     def test_agent_memory_path(self, tmp_path):
         """Providing agent_name should return per-agent memory file."""
         from deerflow.agents.memory.storage import FileMemoryStorage
-        from deerflow.config.memory_config import MemoryConfig
 
-        with (
-            patch("deerflow.agents.memory.storage.get_paths", return_value=_make_paths(tmp_path)),
-            patch.object(AppConfig, "current", return_value=MagicMock(memory=MemoryConfig(storage_path=""))),
-        ):
+        with patch("deerflow.agents.memory.storage.get_paths", return_value=_make_paths(tmp_path)):
             storage = FileMemoryStorage(_TEST_MEMORY_CONFIG)
             path = storage._get_memory_file_path("code-reviewer")
         assert path == tmp_path / "agents" / "code-reviewer" / "memory.json"
 
     def test_different_paths_for_different_agents(self, tmp_path):
         from deerflow.agents.memory.storage import FileMemoryStorage
-        from deerflow.config.memory_config import MemoryConfig
 
-        with (
-            patch("deerflow.agents.memory.storage.get_paths", return_value=_make_paths(tmp_path)),
-            patch.object(AppConfig, "current", return_value=MagicMock(memory=MemoryConfig(storage_path=""))),
-        ):
+        with patch("deerflow.agents.memory.storage.get_paths", return_value=_make_paths(tmp_path)):
             storage = FileMemoryStorage(_TEST_MEMORY_CONFIG)
             path_global = storage._get_memory_file_path(None)
             path_a = storage._get_memory_file_path("agent-a")

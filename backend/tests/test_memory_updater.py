@@ -518,7 +518,6 @@ class TestUpdateMemoryStructuredResponse:
 
         with (
             patch.object(updater, "_get_model", return_value=self._make_mock_model(valid_json)),
-            patch.object(AppConfig, "current", return_value=_memory_config(enabled=True)),
             patch("deerflow.agents.memory.updater.get_memory_data", return_value=_make_memory()),
             patch("deerflow.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=MagicMock(return_value=True))),
         ):
@@ -541,7 +540,6 @@ class TestUpdateMemoryStructuredResponse:
 
         with (
             patch.object(updater, "_get_model", return_value=self._make_mock_model(list_content)),
-            patch.object(AppConfig, "current", return_value=_memory_config(enabled=True)),
             patch("deerflow.agents.memory.updater.get_memory_data", return_value=_make_memory()),
             patch("deerflow.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=MagicMock(return_value=True))),
         ):
@@ -563,7 +561,6 @@ class TestUpdateMemoryStructuredResponse:
 
         with (
             patch.object(updater, "_get_model", return_value=model),
-            patch.object(AppConfig, "current", return_value=_memory_config(enabled=True)),
             patch("deerflow.agents.memory.updater.get_memory_data", return_value=_make_memory()),
             patch("deerflow.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=MagicMock(return_value=True))),
         ):
@@ -588,7 +585,6 @@ class TestUpdateMemoryStructuredResponse:
 
         with (
             patch.object(updater, "_get_model", return_value=model),
-            patch.object(AppConfig, "current", return_value=_memory_config(enabled=True)),
             patch("deerflow.agents.memory.updater.get_memory_data", return_value=_make_memory()),
             patch("deerflow.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=MagicMock(return_value=True))),
         ):
@@ -680,7 +676,6 @@ class TestReinforcementHint:
 
         with (
             patch.object(updater, "_get_model", return_value=model),
-            patch.object(AppConfig, "current", return_value=_memory_config(enabled=True)),
             patch("deerflow.agents.memory.updater.get_memory_data", return_value=_make_memory()),
             patch("deerflow.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=MagicMock(return_value=True))),
         ):
@@ -705,7 +700,6 @@ class TestReinforcementHint:
 
         with (
             patch.object(updater, "_get_model", return_value=model),
-            patch.object(AppConfig, "current", return_value=_memory_config(enabled=True)),
             patch("deerflow.agents.memory.updater.get_memory_data", return_value=_make_memory()),
             patch("deerflow.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=MagicMock(return_value=True))),
         ):
@@ -730,7 +724,6 @@ class TestReinforcementHint:
 
         with (
             patch.object(updater, "_get_model", return_value=model),
-            patch.object(AppConfig, "current", return_value=_memory_config(enabled=True)),
             patch("deerflow.agents.memory.updater.get_memory_data", return_value=_make_memory()),
             patch("deerflow.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=MagicMock(return_value=True))),
         ):

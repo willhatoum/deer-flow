@@ -334,8 +334,6 @@ class TestGuardrailsConfig:
         assert config.provider.config == {"denied_tools": ["bash"]}
 
     def test_guardrails_config_via_app_config(self):
-        from unittest.mock import patch
-
         from deerflow.config.app_config import AppConfig
         from deerflow.config.guardrails_config import GuardrailProviderConfig, GuardrailsConfig
         from deerflow.config.sandbox_config import SandboxConfig
@@ -344,6 +342,5 @@ class TestGuardrailsConfig:
             sandbox=SandboxConfig(use="test"),
             guardrails=GuardrailsConfig(enabled=True, provider=GuardrailProviderConfig(use="test:Foo")),
         )
-        with patch.object(AppConfig, "current", return_value=cfg):
-            config = AppConfig.current().guardrails
-            assert config.enabled is True
+        config = cfg.guardrails
+        assert config.enabled is True

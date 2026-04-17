@@ -1,10 +1,8 @@
 import errno
 from types import SimpleNamespace
-from unittest.mock import patch
 
 import pytest
 
-from deerflow.config.app_config import AppConfig
 from deerflow.sandbox.local.local_sandbox import LocalSandbox, PathMapping
 from deerflow.sandbox.local.local_sandbox_provider import LocalSandboxProvider
 
@@ -313,8 +311,7 @@ class TestLocalSandboxProviderMounts:
             sandbox=sandbox_config,
         )
 
-        with patch.object(AppConfig, "current", return_value=config):
-            provider = LocalSandboxProvider(app_config=config)
+        provider = LocalSandboxProvider(app_config=config)
 
         assert [m.container_path for m in provider._path_mappings] == ["/custom-skills"]
 
@@ -335,8 +332,7 @@ class TestLocalSandboxProviderMounts:
             sandbox=sandbox_config,
         )
 
-        with patch.object(AppConfig, "current", return_value=config):
-            provider = LocalSandboxProvider(app_config=config)
+        provider = LocalSandboxProvider(app_config=config)
 
         assert [m.container_path for m in provider._path_mappings] == ["/mnt/skills"]
 
@@ -359,8 +355,7 @@ class TestLocalSandboxProviderMounts:
             sandbox=sandbox_config,
         )
 
-        with patch.object(AppConfig, "current", return_value=config):
-            provider = LocalSandboxProvider(app_config=config)
+        provider = LocalSandboxProvider(app_config=config)
 
         assert [m.container_path for m in provider._path_mappings] == ["/mnt/skills"]
 
@@ -383,7 +378,6 @@ class TestLocalSandboxProviderMounts:
             sandbox=sandbox_config,
         )
 
-        with patch.object(AppConfig, "current", return_value=config):
-            provider = LocalSandboxProvider(app_config=config)
+        provider = LocalSandboxProvider(app_config=config)
 
         assert [m.container_path for m in provider._path_mappings] == ["/mnt/skills", "/mnt/data"]

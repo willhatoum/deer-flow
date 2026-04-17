@@ -70,8 +70,7 @@ class TestClientInit:
 
     def test_custom_params(self, mock_app_config):
         mock_middleware = MagicMock()
-        with patch.object(AppConfig, "current", return_value=mock_app_config):
-            c = DeerFlowClient(model_name="gpt-4", thinking_enabled=False, subagent_enabled=True, plan_mode=True, agent_name="test-agent", available_skills={"skill1", "skill2"}, middlewares=[mock_middleware])
+        c = DeerFlowClient(model_name="gpt-4", thinking_enabled=False, subagent_enabled=True, plan_mode=True, agent_name="test-agent", available_skills={"skill1", "skill2"}, middlewares=[mock_middleware])
         assert c._model_name == "gpt-4"
         assert c._thinking_enabled is False
         assert c._subagent_enabled is True
@@ -81,11 +80,10 @@ class TestClientInit:
         assert c._middlewares == [mock_middleware]
 
     def test_invalid_agent_name(self, mock_app_config):
-        with patch.object(AppConfig, "current", return_value=mock_app_config):
-            with pytest.raises(ValueError, match="Invalid agent name"):
-                DeerFlowClient(agent_name="invalid name with spaces!")
-            with pytest.raises(ValueError, match="Invalid agent name"):
-                DeerFlowClient(agent_name="../path/traversal")
+        with pytest.raises(ValueError, match="Invalid agent name"):
+            DeerFlowClient(agent_name="invalid name with spaces!")
+        with pytest.raises(ValueError, match="Invalid agent name"):
+            DeerFlowClient(agent_name="../path/traversal")
 
     def test_custom_config_path(self, mock_app_config):
         # rather than touching AppConfig.init() / process-global state.
@@ -96,8 +94,7 @@ class TestClientInit:
 
     def test_checkpointer_stored(self, mock_app_config):
         cp = MagicMock()
-        with patch.object(AppConfig, "current", return_value=mock_app_config):
-            c = DeerFlowClient(checkpointer=cp)
+        c = DeerFlowClient(checkpointer=cp)
         assert c._checkpointer is cp
 
 
@@ -1840,7 +1837,6 @@ class TestScenarioConfigManagement:
             with (
                 patch("deerflow.skills.loader.load_skills", side_effect=[[skill], [toggled]]),
                 patch("deerflow.client.ExtensionsConfig.resolve_config_path", return_value=config_file),
-                patch.object(AppConfig, "current", return_value=MagicMock(extensions=ext_config)),
                 patch("deerflow.config.app_config.AppConfig.from_file", return_value=MagicMock()),
             ):
                 skill_result = client.update_skill("code-gen", enabled=False)
@@ -2093,7 +2089,6 @@ class TestScenarioSkillInstallAndUse:
             with (
                 patch("deerflow.skills.loader.load_skills", side_effect=[[installed_skill], [disabled_skill]]),
                 patch("deerflow.client.ExtensionsConfig.resolve_config_path", return_value=config_file),
-                patch.object(AppConfig, "current", return_value=MagicMock(extensions=ext_config)),
                 patch("deerflow.config.app_config.AppConfig.from_file", return_value=MagicMock()),
             ):
                 toggled = client.update_skill("my-analyzer", enabled=False)
@@ -2700,7 +2695,6 @@ class TestConfigUpdateErrors:
             with (
                 patch("deerflow.skills.loader.load_skills", side_effect=[[skill], []]),
                 patch("deerflow.client.ExtensionsConfig.resolve_config_path", return_value=config_file),
-                patch.object(AppConfig, "current", return_value=MagicMock(extensions=ext_config)),
                 patch("deerflow.config.app_config.AppConfig.from_file", return_value=MagicMock()),
             ):
                 with pytest.raises(RuntimeError, match="disappeared"):
@@ -3115,7 +3109,6 @@ class TestBugAgentInvalidationInconsistency:
             with (
                 patch("deerflow.skills.loader.load_skills", side_effect=[[skill], [updated]]),
                 patch("deerflow.client.ExtensionsConfig.resolve_config_path", return_value=config_file),
-                patch.object(AppConfig, "current", return_value=MagicMock(extensions=ext_config)),
                 patch("deerflow.config.app_config.AppConfig.from_file", return_value=MagicMock()),
             ):
                 client.update_skill("s1", enabled=False)

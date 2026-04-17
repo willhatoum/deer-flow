@@ -25,7 +25,6 @@ def _enable_memory(monkeypatch):
     """Ensure MemoryUpdateQueue.add() doesn't early-return on disabled memory."""
     config = MagicMock(spec=AppConfig)
     config.memory = MemoryConfig(enabled=True)
-    monkeypatch.setattr(AppConfig, "current", staticmethod(lambda: config))
 
 
 def test_conversation_context_has_user_id():

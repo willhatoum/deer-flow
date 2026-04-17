@@ -26,11 +26,9 @@ if TYPE_CHECKING:
 def get_config(request: Request) -> AppConfig:
     """FastAPI dependency returning the app-scoped ``AppConfig``.
 
-    Prefer this over ``AppConfig.current()`` in new code. Reads from
-    ``request.app.state.config`` which is set at startup (``app.py``
-    lifespan) and swapped on config reload (``routers/mcp.py``,
-    ``routers/skills.py``). Phase 2 of the config refactor migrates all
-    router-level ``AppConfig.current()`` callers to this dependency.
+    Reads from ``request.app.state.config`` which is set at startup
+    (``app.py`` lifespan) and swapped on config reload (``routers/mcp.py``,
+    ``routers/skills.py``).
     """
     cfg = getattr(request.app.state, "config", None)
     if cfg is None:
@@ -53,8 +51,8 @@ async def langgraph_runtime(app: FastAPI) -> AsyncGenerator[None, None]:
     from deerflow.runtime.events.store import make_run_event_store
 
     async with AsyncExitStack() as stack:
-        # app.state.config is populated earlier in lifespan(); thread it into
-        # every provider that used to reach for AppConfig.current().
+        # app.state.config is populated earlier in lifespan(); thread it
+        # explicitly into every provider below.
         config = app.state.config
 
         app.state.stream_bridge = await stack.enter_async_context(make_stream_bridge(config))

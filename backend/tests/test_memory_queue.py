@@ -25,10 +25,7 @@ def _make_config(**memory_overrides) -> AppConfig:
 def test_queue_add_preserves_existing_correction_flag_for_same_thread() -> None:
     queue = MemoryUpdateQueue(_TEST_APP_CONFIG)
 
-    with (
-        patch.object(AppConfig, "current", return_value=_make_config(enabled=True)),
-        patch.object(queue, "_reset_timer"),
-    ):
+    with patch.object(queue, "_reset_timer"):
         queue.add(thread_id="thread-1", messages=["first"], correction_detected=True)
         queue.add(thread_id="thread-1", messages=["second"], correction_detected=False)
 
@@ -66,10 +63,7 @@ def test_process_queue_forwards_correction_flag_to_updater() -> None:
 def test_queue_add_preserves_existing_reinforcement_flag_for_same_thread() -> None:
     queue = MemoryUpdateQueue(_TEST_APP_CONFIG)
 
-    with (
-        patch.object(AppConfig, "current", return_value=_make_config(enabled=True)),
-        patch.object(queue, "_reset_timer"),
-    ):
+    with patch.object(queue, "_reset_timer"):
         queue.add(thread_id="thread-1", messages=["first"], reinforcement_detected=True)
         queue.add(thread_id="thread-1", messages=["second"], reinforcement_detected=False)
 

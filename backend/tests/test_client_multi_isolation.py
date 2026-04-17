@@ -1,7 +1,7 @@
 """Multi-client isolation regression test.
 
 Phase 2 Task P2-3: ``DeerFlowClient`` now captures its ``AppConfig`` in the
-constructor instead of going through process-global ``AppConfig.current()``.
+constructor instead of going through a process-global config.
 This test pins the resulting invariant: two clients with different configs
 can coexist without contending over shared state.
 

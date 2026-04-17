@@ -3,13 +3,11 @@
 Covers:
 - SubagentsAppConfig / SubagentOverrideConfig model validation and defaults
 - get_timeout_for() / get_max_turns_for() resolution logic
-- AppConfig.subagents field access via AppConfig.current()
+- AppConfig.subagents field access
 - registry.get_subagent_config() applies config overrides
 - registry.list_subagents() applies overrides for all agents
 - Polling timeout calculation in task_tool is consistent with config
 """
-
-from unittest.mock import patch
 
 import pytest
 
@@ -133,17 +131,16 @@ class TestMaxTurnsResolution:
 
 
 # ---------------------------------------------------------------------------
-# AppConfig.subagents via AppConfig.current()
+# AppConfig.subagents
 # ---------------------------------------------------------------------------
 
 
 class TestAppConfigSubagents:
     def test_load_global_timeout(self):
         cfg = _make_config(timeout_seconds=300, max_turns=120)
-        with patch.object(AppConfig, "current", return_value=cfg):
-            sub = AppConfig.current().subagents
-            assert sub.timeout_seconds == 300
-            assert sub.max_turns == 120
+        sub = cfg.subagents
+        assert sub.timeout_seconds == 300
+        assert sub.max_turns == 120
 
     def test_load_with_per_agent_overrides(self):
         cfg = _make_config(
@@ -154,29 +151,26 @@ class TestAppConfigSubagents:
                 "bash": {"timeout_seconds": 60, "max_turns": 80},
             },
         )
-        with patch.object(AppConfig, "current", return_value=cfg):
-            sub = AppConfig.current().subagents
-            assert sub.get_timeout_for("general-purpose") == 1800
-            assert sub.get_timeout_for("bash") == 60
-            assert sub.get_max_turns_for("general-purpose", 100) == 200
-            assert sub.get_max_turns_for("bash", 60) == 80
+        sub = cfg.subagents
+        assert sub.get_timeout_for("general-purpose") == 1800
+        assert sub.get_timeout_for("bash") == 60
+        assert sub.get_max_turns_for("general-purpose", 100) == 200
+        assert sub.get_max_turns_for("bash", 60) == 80
 
     def test_load_partial_override(self):
         cfg = _make_config(
             timeout_seconds=600,
             agents={"bash": {"timeout_seconds": 120, "max_turns": 70}},
         )
-        with patch.object(AppConfig, "current", return_value=cfg):
-            sub = AppConfig.current().subagents
-            assert sub.get_timeout_for("general-purpose") == 600
-            assert sub.get_timeout_for("bash") == 120
-            assert sub.get_max_turns_for("general-purpose", 100) == 100
-            assert sub.get_max_turns_for("bash", 60) == 70
+        sub = cfg.subagents
+        assert sub.get_timeout_for("general-purpose") == 600
+        assert sub.get_timeout_for("bash") == 120
+        assert sub.get_max_turns_for("general-purpose", 100) == 100
+        assert sub.get_max_turns_for("bash", 60) == 70
 
     def test_load_empty_uses_defaults(self):
         cfg = _make_config()
-        with patch.object(AppConfig, "current", return_value=cfg):
-            sub = AppConfig.current().subagents
-            assert sub.timeout_seconds == 900
-            assert sub.max_turns is None
-            assert sub.agents == {}
+        sub = cfg.subagents
+        assert sub.timeout_seconds == 900
+        assert sub.max_turns is None
+        assert sub.agents == {}

@@ -222,20 +222,7 @@ class AppConfig(BaseModel):
         return next((group for group in self.tool_groups if group.name == name), None)
 
     # AppConfig is a pure value object: construct with ``from_file()``, pass around.
-    # Composition roots that hold the singleton:
+    # Composition roots that hold the resolved instance:
     #   - Gateway:   ``app.state.config`` via ``Depends(get_config)``
     #   - Client:    ``DeerFlowClient._app_config``
     #   - Agent run: ``Runtime[DeerFlowContext].context.app_config``
-    #
-    # ``current()`` is kept as a deprecated no-op slot purely so legacy tests
-    # that still run ``patch.object(AppConfig, "current", ...)`` can attach
-    # without an ``AttributeError`` at teardown. Production code never calls
-    # it — any in-process invocation raises so regressions are loud.
-
-    @classmethod
-    def current(cls) -> AppConfig:
-        raise RuntimeError(
-            "AppConfig.current() is removed. Pass AppConfig explicitly: "
-            "`runtime.context.app_config` in agent paths, `Depends(get_config)` in Gateway, "
-            "`self._app_config` in DeerFlowClient."
-        )

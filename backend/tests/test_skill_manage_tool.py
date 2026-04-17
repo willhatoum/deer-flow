@@ -34,7 +34,6 @@ def test_skill_manage_create_and_patch(monkeypatch, tmp_path):
         skills=SimpleNamespace(get_skills_path=lambda: skills_root, container_path="/mnt/skills"),
         skill_evolution=SimpleNamespace(enabled=True, moderation_model_name=None),
     )
-    monkeypatch.setattr(AppConfig, "current", staticmethod(lambda: config))
     refresh_calls = []
 
     async def _refresh(*a, **k):
@@ -76,7 +75,6 @@ def test_skill_manage_patch_replaces_single_occurrence_by_default(monkeypatch, t
         skills=SimpleNamespace(get_skills_path=lambda: skills_root, container_path="/mnt/skills"),
         skill_evolution=SimpleNamespace(enabled=True, moderation_model_name=None),
     )
-    monkeypatch.setattr(AppConfig, "current", staticmethod(lambda: config))
 
     async def _refresh(*a, **k):
         return None
@@ -114,7 +112,6 @@ def test_skill_manage_rejects_public_skill_patch(monkeypatch, tmp_path):
         skills=SimpleNamespace(get_skills_path=lambda: skills_root, container_path="/mnt/skills"),
         skill_evolution=SimpleNamespace(enabled=True, moderation_model_name=None),
     )
-    monkeypatch.setattr(AppConfig, "current", staticmethod(lambda: config))
 
     runtime = SimpleNamespace(context=_make_context("", config), config={"configurable": {}})
 
@@ -137,7 +134,6 @@ def test_skill_manage_sync_wrapper_supported(monkeypatch, tmp_path):
         skills=SimpleNamespace(get_skills_path=lambda: skills_root, container_path="/mnt/skills"),
         skill_evolution=SimpleNamespace(enabled=True, moderation_model_name=None),
     )
-    monkeypatch.setattr(AppConfig, "current", staticmethod(lambda: config))
     refresh_calls = []
 
     async def _refresh(*a, **k):
@@ -164,7 +160,6 @@ def test_skill_manage_rejects_support_path_traversal(monkeypatch, tmp_path):
         skills=SimpleNamespace(get_skills_path=lambda: skills_root, container_path="/mnt/skills"),
         skill_evolution=SimpleNamespace(enabled=True, moderation_model_name=None),
     )
-    monkeypatch.setattr(AppConfig, "current", staticmethod(lambda: config))
 
     async def _refresh(*a, **k):
         return None

@@ -5,8 +5,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from deerflow.config.app_config import AppConfig
-
 # --- Phase 2 test helper: injected runtime for community tools ---
 from types import SimpleNamespace as _P2NS
 from deerflow.config.app_config import AppConfig as _P2AppConfig
@@ -22,7 +20,7 @@ def _runtime_with_config(config):
     ``DeerFlowContext`` is a frozen dataclass typed as ``AppConfig`` but
     dataclasses don't enforce the type at runtime — handing a Mock through
     lets tests exercise the tool's ``get_tool_config`` lookup without going
-    via ``AppConfig.current``.
+    through a process-global config.
     """
     ctx = _P2Ctx.__new__(_P2Ctx)
     object.__setattr__(ctx, "app_config", config)
@@ -35,17 +33,8 @@ def _runtime_with_config(config):
 
 @pytest.fixture
 def mock_app_config():
-    """Mock the app config to return tool configurations."""
-    with patch.object(AppConfig, "current") as mock_config:
-        tool_config = MagicMock()
-        tool_config.model_extra = {
-            "max_results": 5,
-            "search_type": "auto",
-            "contents_max_characters": 1000,
-            "api_key": "test-api-key",
-        }
-        mock_config.return_value.get_tool_config.return_value = tool_config
-        yield mock_config
+    """Fixture retained as a pass-through: tests inject config via runtime directly."""
+    yield
 
 
 @pytest.fixture

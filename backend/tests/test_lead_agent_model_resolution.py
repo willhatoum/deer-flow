@@ -75,7 +75,6 @@ def test_make_lead_agent_disables_thinking_when_model_does_not_support_it(monkey
 
     import deerflow.tools as tools_module
 
-    monkeypatch.setattr(AppConfig, "current", staticmethod(lambda: app_config))
     monkeypatch.setattr(tools_module, "get_available_tools", lambda **kwargs: [])
     monkeypatch.setattr(lead_agent_module, "_build_middlewares", lambda app_config, config, model_name, agent_name=None: [])
 
@@ -123,7 +122,6 @@ def test_build_middlewares_uses_resolved_model_name_for_vision(monkeypatch):
         ]
     )
 
-    monkeypatch.setattr(AppConfig, "current", staticmethod(lambda: app_config))
     monkeypatch.setattr(lead_agent_module, "_create_summarization_middleware", lambda _ac: None)
     monkeypatch.setattr(lead_agent_module, "_create_todo_list_middleware", lambda is_plan_mode: None)
 
@@ -137,7 +135,6 @@ def test_build_middlewares_uses_resolved_model_name_for_vision(monkeypatch):
 def test_create_summarization_middleware_uses_configured_model_alias(monkeypatch):
     app_config = _make_app_config([_make_model("default", supports_thinking=False)])
     patched = app_config.model_copy(update={"summarization": SummarizationConfig(enabled=True, model_name="model-masswork")})
-    monkeypatch.setattr(AppConfig, "current", staticmethod(lambda: patched))
 
     from unittest.mock import MagicMock
 

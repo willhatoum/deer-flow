@@ -6,7 +6,6 @@ from types import SimpleNamespace
 import pytest
 
 from deerflow.config.acp_config import ACPAgentConfig
-from deerflow.config.app_config import AppConfig
 from deerflow.config.extensions_config import ExtensionsConfig, McpServerConfig
 from deerflow.tools.builtins.invoke_acp_agent_tool import (
     _build_acp_mcp_servers,
@@ -679,11 +678,10 @@ def test_get_available_tools_includes_invoke_acp_agent_when_agents_configured(mo
         },
         get_model_config=lambda name: None,
     )
-    monkeypatch.setattr(AppConfig, "current", staticmethod(lambda: fake_config))
     monkeypatch.setattr(
         "deerflow.config.extensions_config.ExtensionsConfig.from_file",
         classmethod(lambda cls: ExtensionsConfig(mcp_servers={}, skills={})),
     )
 
-    tools = get_available_tools(include_mcp=True, subagent_enabled=False, app_config=AppConfig.current())
+    tools = get_available_tools(include_mcp=True, subagent_enabled=False, app_config=fake_config)
     assert "invoke_acp_agent" in [tool.name for tool in tools]
