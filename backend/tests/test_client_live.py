@@ -101,7 +101,7 @@ class TestLiveStreaming:
 class TestLiveToolUse:
     def test_agent_uses_bash_tool(self, client):
         """Agent uses bash tool when asked to run a command."""
-        if not is_host_bash_allowed():
+        if not is_host_bash_allowed(client._app_config):
             pytest.skip("Host bash is disabled for LocalSandboxProvider in the active config")
 
         events = list(client.stream("Use the bash tool to run: echo 'LIVE_TEST_OK'. Then tell me the output."))
